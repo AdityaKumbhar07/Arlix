@@ -57,7 +57,7 @@ import kotlinx.coroutines.launch
 // Declares mutually exclusive presentation states of the vault.
 
 enum class E_ui_VaultState {
-    LOCKED, UNLOCKED
+    SETUP,LOCKED, UNLOCKED
 }
 
 class MainActivity : ComponentActivity() {
@@ -74,12 +74,17 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             window.decorView.setAccessibilityDataSensitive(View.ACCESSIBILITY_DATA_SENSITIVE_YES)
         }
+        v_ui_viewModel.f_ui_checkVaultInitialization(this)
         enableEdgeToEdge()
         setContent {
             ArlixTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     // Unidirectional state-driven screen switch
                     when (v_ui_viewModel.v_ui_vaultState) {
+                        E_ui_VaultState.SETUP -> C_ui_SetupScreen(
+                            modifier = Modifier.padding(innerPadding),
+                            v_ui_viewModel = v_ui_viewModel
+                        )
                         E_ui_VaultState.LOCKED -> C_ui_LockScreen(
                             modifier = Modifier.padding(innerPadding),
                             v_ui_viewModel = v_ui_viewModel
@@ -102,6 +107,75 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+}
+
+@Composable
+fun C_ui_SetupScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultViewModel) {
+    val v_context = LocalContext.current
+
+    Column(
+        modifier = modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "🛡️ Setup ShadowVault",
+            style = MaterialTheme.typography.headlineMedium
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Create your master passphrase. This will physically encrypt your vault using AES-256.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+
+        OutlinedTextField(
+            value = v_ui_viewModel.v_ui_passwordInput,
+            onValueChange = { v_ui_viewModel.v_ui_passwordInput = it },
+            label = { Text("Master Passphrase") },
+            singleLine = true,
+            visualTransformation = if (v_ui_viewModel.v_ui_isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            trailingIcon = {
+                TextButton(onClick = {
+                    v_ui_viewModel.v_ui_isPasswordVisible = !v_ui_viewModel.v_ui_isPasswordVisible
+                }) {
+                    Text(if (v_ui_viewModel.v_ui_isPasswordVisible) "HIDE" else "SHOW")
+                }
+            }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = v_ui_viewModel.v_ui_confirmPasswordInput,
+            onValueChange = { v_ui_viewModel.v_ui_confirmPasswordInput = it },
+            label = { Text("Confirm Master Passphrase") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+        )
+
+        if (v_ui_viewModel.v_ui_statusMessage.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = v_ui_viewModel.v_ui_statusMessage,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+        Button(
+            onClick = { v_ui_viewModel.f_ui_onCreateVaultClicked(v_context) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Create Encrypted Vault")
+        }
+    }
 }
 
 // Vault Lock screen
