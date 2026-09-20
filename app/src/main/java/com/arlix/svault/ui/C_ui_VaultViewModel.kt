@@ -45,6 +45,7 @@ class C_ui_VaultViewModel : ViewModel() {
 
     var v_ui_vaultState by mutableStateOf(E_ui_VaultState.LOCKED)
     var v_ui_passwordInput by mutableStateOf("")
+    var v_ui_confirmPasswordInput by mutableStateOf("")
     var v_ui_isPasswordVisible by mutableStateOf(false)
     var v_ui_statusMessage by mutableStateOf("")
     var v_ui_isLoading by mutableStateOf(false)
@@ -75,7 +76,34 @@ class C_ui_VaultViewModel : ViewModel() {
         }
     }
 
-        fun f_ui_onUnlockedClicked(v_context: Context) {
+    fun f_ui_checkVaultInitialization(v_context: Context) {
+        val v_dbFile = v_context.getDatabasePath("shadowvault.db")
+        if (!v_dbFile.exists()) {
+            v_ui_vaultState = E_ui_VaultState.SETUP
+        } else if (v_ui_vaultState != E_ui_VaultState.UNLOCKED) {
+            v_ui_vaultState = E_ui_VaultState.LOCKED
+        }
+    }
+
+    fun f_ui_onCreateVaultClicked(v_context: Context) {
+        if (v_ui_passwordInput.isBlank()) {
+            v_ui_statusMessage = "Passphrase cannot be empty"
+            return
+        }
+        if (v_ui_passwordInput.length < 4) {
+            v_ui_statusMessage = "Passphrase must be at least 4 characters"
+            return
+        }
+        if (v_ui_passwordInput != v_ui_confirmPasswordInput) {
+            v_ui_statusMessage = "Passphrases do not match"
+            return
+        }
+
+        f_ui_onUnlockedClicked(v_context)
+        v_ui_confirmPasswordInput = ""
+    }
+
+    fun f_ui_onUnlockedClicked(v_context: Context) {
         if (v_ui_passwordInput.isBlank()) {
             v_ui_statusMessage = "Passphrase cannot be empty"
             return
