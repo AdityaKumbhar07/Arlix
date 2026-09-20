@@ -1,10 +1,18 @@
 package com.arlix.svault.ui
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.arlix.svault.E_ui_VaultState
+import com.arlix.svault.db.C_db_VaultDatabase
+import com.arlix.svault.db.C_db_VaultEntity
+import com.arlix.svault.db.I_db_VaultDao
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 // Different security chamgers segregating credential according to sensitivity
 enum class E_ui_VaultChamber {
@@ -20,14 +28,19 @@ enum class E_ui_HotSection(val v_ui_label: String) {
 }
 
 data class C_ui_CredentialItem(
-    val v_ui_id: Long,
+    val v_ui_id: String,
     val v_ui_title: String,
     val v_ui_account: String,
     val v_ui_secret: String,
-    val v_ui_section: E_ui_HotSection
+    val v_ui_section: E_ui_HotSection,
+    val v_ui_chamber: E_ui_VaultChamber = E_ui_VaultChamber.HOT
 )
 
 class C_ui_VaultViewModel : ViewModel() {
+    private var v_ui_database: C_db_VaultDatabase? = null
+    private var v_ui_vaultDao: I_db_VaultDao? = null
+    private var v_ui_streamJob: Job? = null
+    var v_ui_credentialsList by mutableStateOf<List<C_ui_CredentialItem>>(emptyList())
 
     var v_ui_vaultState by mutableStateOf(E_ui_VaultState.LOCKED)
     var v_ui_passwordInput by mutableStateOf("")
@@ -37,33 +50,110 @@ class C_ui_VaultViewModel : ViewModel() {
     var v_ui_selectedChamber by mutableStateOf(E_ui_VaultChamber.HOT)
     var v_ui_selectedHotSection by mutableStateOf(E_ui_HotSection.GENERAL)
 
-    //testing variables
-    var v_ui_credentialsList by mutableStateOf(
-        listOf(
-            C_ui_CredentialItem(1, "Netflix", "user@personal.com", "N3tfl!xP@ss2026", E_ui_HotSection.GENERAL),
-            C_ui_CredentialItem(2, "Amazon Prime", "user@personal.com", "Amz0n#Pr1me99", E_ui_HotSection.GENERAL),
-            C_ui_CredentialItem(3, "GitHub Enterprise", "user", "ghp_secureToken998877", E_ui_HotSection.PERSONAL),
-            C_ui_CredentialItem(4, "ProtonMail", "user@proton.me", "Pr0t0n_Vault_K3y!", E_ui_HotSection.PERSONAL),
-            C_ui_CredentialItem(5, "HDFC NetBanking", "user_hdfc_usr", "Hdfc@SecurePin2026", E_ui_HotSection.FINANCE),
-            C_ui_CredentialItem(6, "UPI PIN Backup", "Primary Bank Account", "984251", E_ui_HotSection.FINANCE)
-        )
-    )
 
-    fun f_ui_onUnlockedClicked() {
-        if(v_ui_passwordInput.isBlank()) {
-            v_ui_statusMessage = "Passphrase Can't be empty my friend"
+    fun f_ui_startStreamingCredentials() {
+        v_ui_streamJob?.cancel()
+        val v_dao = v_ui_vaultDao ?: return
+
+        v_ui_streamJob = viewModelScope.launch {
+            v_dao.f_db_getEntriesByChamberAndSection(
+                v_chamber = v_ui_selectedChamber.name,
+                v_section = v_ui_selectedHotSection.name
+            ).collectLatest { v_entities ->
+                v_ui_credentialsList = v_entities.map { v_entity ->
+                    C_ui_CredentialItem(
+                        v_ui_id = v_entity.v_db_id,
+                        v_ui_title = v_entity.v_db_title,
+                        v_ui_account = v_entity.v_db_account,
+                        v_ui_secret = v_entity.v_db_secret,
+                        v_ui_section = E_ui_HotSection.valueOf(v_entity.v_db_section),
+                        v_ui_chamber = E_ui_VaultChamber.valueOf(v_entity.v_db_chamber)
+                    )
+                }
+            }
+        }
+    }
+
+    fun f_ui_onUnlockedClicked(v_context: Context) {
+        if (v_ui_passwordInput.isBlank()) {
+            v_ui_statusMessage = "Passphrase cannot be empty"
             return
         }
-        v_ui_statusMessage = ""
-        v_ui_vaultState = E_ui_VaultState.UNLOCKED
-        v_ui_passwordInput = ""
+
+        try {
+            v_ui_isLoading = true
+            val v_passphraseBytes = v_ui_passwordInput.toByteArray(Charsets.UTF_8)
+
+            // Decrypts and boots SQLCipher
+            v_ui_database = C_db_VaultDatabase.f_db_getInstance(v_context, v_passphraseBytes)
+            v_ui_vaultDao = v_ui_database?.f_db_vaultDao()
+            v_ui_database?.openHelper?.writableDatabase?.query("SELECT count(*) FROM sqlite_master")?.close()
+            // State transition
+            v_ui_vaultState = E_ui_VaultState.UNLOCKED
+            v_ui_statusMessage = ""
+            v_ui_passwordInput = "" // Clear plaintext buffer from UI
+            // Stream credentials from encrypted SQLite
+            f_ui_startStreamingCredentials()
+        } catch (e: Exception) {
+            v_ui_statusMessage = "Decryption failed: Incorrect passphrase"
+            v_ui_vaultState = E_ui_VaultState.LOCKED
+            C_db_VaultDatabase.f_db_closeDatabase() 
+        } finally {
+            v_ui_isLoading = false
+        }
+    }
+
+    fun f_ui_insertCredential(
+        v_title: String,
+        v_account: String,
+        v_secret: String,
+        v_chamber: E_ui_VaultChamber = v_ui_selectedChamber,
+        v_section: E_ui_HotSection = v_ui_selectedHotSection
+    ) {
+        viewModelScope.launch {
+            val v_entity = C_db_VaultEntity(
+                v_db_title = v_title,
+                v_db_account = v_account,
+                v_db_secret = v_secret,
+                v_db_chamber = v_chamber.name,
+                v_db_section = v_section.name
+            )
+            v_ui_vaultDao?.f_db_insertEntry(v_entity)
+        }
+    }
+
+    fun f_ui_selectChamber(v_chamber: E_ui_VaultChamber) {
+        v_ui_selectedChamber = v_chamber
+        f_ui_startStreamingCredentials()
+    }
+
+    fun f_ui_selectHotSection(v_section: E_ui_HotSection) {
+        v_ui_selectedHotSection = v_section
+        f_ui_startStreamingCredentials()
+    }
+
+    fun f_ui_deleteCredential(v_id: String) {
+        viewModelScope.launch {
+            v_ui_vaultDao?.f_db_softDeleteEntry(v_id)
+        }
     }
 
     fun f_ui_lockImmediate() {
+        v_ui_streamJob?.cancel()
+        v_ui_streamJob = null
+
+        v_ui_credentialsList = emptyList()
+
+        C_db_VaultDatabase.f_db_closeDatabase()
+        v_ui_database = null
+        v_ui_vaultDao = null
+
         v_ui_vaultState = E_ui_VaultState.LOCKED
         v_ui_passwordInput = ""
         v_ui_statusMessage = ""
         v_ui_selectedChamber = E_ui_VaultChamber.HOT
         v_ui_selectedHotSection = E_ui_HotSection.GENERAL
     }
+
+
 }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -101,6 +102,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun C_ui_LockScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultViewModel) {
 
+    val v_context = LocalContext.current
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -138,7 +141,7 @@ fun C_ui_LockScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultVie
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(
-                onClick = { v_ui_viewModel.f_ui_onUnlockedClicked() },
+                onClick = { v_ui_viewModel.f_ui_onUnlockedClicked(v_context) },
                 modifier = Modifier.fillMaxWidth()
         ) {
             Text("Unlock Vault")
@@ -151,23 +154,40 @@ fun C_ui_LockScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultVie
 @Composable
 fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultViewModel ){
 
+    var v_ui_showAddDialog by remember { mutableStateOf(false) }
+
+    if (v_ui_showAddDialog) {
+        C_ui_AddCredentialDialog(
+            v_onDismiss = { v_ui_showAddDialog = false },
+            v_onConfirm = { v_title, v_account, v_secret ->
+                v_ui_viewModel.f_ui_insertCredential(v_title, v_account, v_secret)
+                v_ui_showAddDialog = false
+            }
+        )
+    }
+
     Column(
         modifier = modifier.fillMaxSize().padding(17.dp)
     ) {
         Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "ShadowVault",
                 style = MaterialTheme.typography.titleLarge
             )
-            Button(
-                onClick = { v_ui_viewModel.f_ui_lockImmediate() },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            ) {
-                Text("LOCK VAULT")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { v_ui_showAddDialog = true }) {
+                    Text("+ NEW")
+                }
+                Button(
+                    onClick = { v_ui_viewModel.f_ui_lockImmediate() },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("LOCK")
+                }
             }
         }
 
@@ -178,7 +198,7 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
-                onClick = { v_ui_viewModel.v_ui_selectedChamber = E_ui_VaultChamber.HOT },
+                onClick = { v_ui_viewModel.f_ui_selectChamber(E_ui_VaultChamber.HOT) },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (v_ui_viewModel.v_ui_selectedChamber == E_ui_VaultChamber.HOT)
@@ -191,7 +211,7 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
             }
 
             Button(
-                onClick = { v_ui_viewModel.v_ui_selectedChamber = E_ui_VaultChamber.COLD },
+                onClick = { v_ui_viewModel.f_ui_selectChamber(E_ui_VaultChamber.COLD) },
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (v_ui_viewModel.v_ui_selectedChamber == E_ui_VaultChamber.COLD)
@@ -211,7 +231,7 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
                 E_ui_HotSection.entries.forEach { v_section ->
                     val v_isSelected = v_ui_viewModel.v_ui_selectedHotSection == v_section
                     TextButton(
-                        onClick = { v_ui_viewModel.v_ui_selectedHotSection = v_section },
+                        onClick = { v_ui_viewModel.f_ui_selectHotSection(v_section) },
                         colors = ButtonDefaults.textButtonColors(
                             contentColor = if (v_isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -241,25 +261,24 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        var v_ui_expandedCardId by remember { mutableStateOf<Long?>(null) }
+        var v_ui_expandedCardId by remember { mutableStateOf<String?>(null) }
 
-        // Filter items matching the active subsection
-        val v_filteredList = v_ui_viewModel.v_ui_credentialsList.filter {
-            it.v_ui_section == v_ui_viewModel.v_ui_selectedHotSection
-        }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) { items(v_filteredList) { v_item ->
-            C_ui_CredentialCard(
-                v_ui_item = v_item,
-                v_ui_isExpanded = (v_ui_expandedCardId == v_item.v_ui_id),
-                onCardClicked = {
-                    // If already open, clicking it closes it (null); otherwise opens it
-                    v_ui_expandedCardId = if (v_ui_expandedCardId == v_item.v_ui_id) null else v_item.v_ui_id
-                }
-            )
-        }
+        ) {
+            items(v_ui_viewModel.v_ui_credentialsList) { v_item ->
+                C_ui_CredentialCard(
+                    v_ui_item = v_item,
+                    v_ui_isExpanded = (v_ui_expandedCardId == v_item.v_ui_id),
+                    onCardClicked = {
+                        v_ui_expandedCardId = if (v_ui_expandedCardId == v_item.v_ui_id) null else v_item.v_ui_id
+                    },
+                    onDeleteClicked = {
+                        v_ui_viewModel.f_ui_deleteCredential(v_item.v_ui_id)
+                    }
+                )
+            }
         }
     }
 }
@@ -270,6 +289,7 @@ fun C_ui_CredentialCard(
     v_ui_item: C_ui_CredentialItem,
     v_ui_isExpanded: Boolean,
     onCardClicked: () -> Unit,
+    onDeleteClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var v_ui_isSecretVisible by remember { mutableStateOf(false) }
@@ -352,7 +372,71 @@ fun C_ui_CredentialCard(
                         else "COPY (5s auto wipe)"
                     )
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextButton(
+                    onClick = onDeleteClicked,
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("DELETE CREDENTIAL")
+                }
             }
         }
     }
+}
+
+@Composable
+fun C_ui_AddCredentialDialog(
+    v_onDismiss: () -> Unit,
+    v_onConfirm: (v_title: String, v_account: String, v_secret: String) -> Unit
+) {
+    var v_title by remember { mutableStateOf("") }
+    var v_account by remember { mutableStateOf("") }
+    var v_secret by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = v_onDismiss,
+        title = { Text("Add Encrypted Credential") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = v_title,
+                    onValueChange = { v_title = it },
+                    label = { Text("Title / Service") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = v_account,
+                    onValueChange = { v_account = it },
+                    label = { Text("Username / Email") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = v_secret,
+                    onValueChange = { v_secret = it },
+                    label = { Text("Secret / Password") },
+                    singleLine = true
+                )
+            }
+        },
+
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (v_title.isNotBlank() && v_secret.isNotBlank()) {
+                        v_onConfirm(v_title, v_account, v_secret)
+                    }
+                }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = v_onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
