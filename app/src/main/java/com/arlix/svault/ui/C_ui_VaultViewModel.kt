@@ -10,6 +10,7 @@ import com.arlix.svault.E_ui_VaultState
 import com.arlix.svault.db.C_db_VaultDatabase
 import com.arlix.svault.db.C_db_VaultEntity
 import com.arlix.svault.db.I_db_VaultDao
+import com.arlix.svault.mem.C_mem_NativeBridge
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -74,32 +75,45 @@ class C_ui_VaultViewModel : ViewModel() {
         }
     }
 
-    fun f_ui_onUnlockedClicked(v_context: Context) {
+        fun f_ui_onUnlockedClicked(v_context: Context) {
         if (v_ui_passwordInput.isBlank()) {
             v_ui_statusMessage = "Passphrase cannot be empty"
             return
         }
 
+        var v_passphraseBytes: ByteArray? = null
+
         try {
             v_ui_isLoading = true
-            val v_passphraseBytes = v_ui_passwordInput.toByteArray(Charsets.UTF_8)
+            v_passphraseBytes = v_ui_passwordInput.toByteArray(Charsets.UTF_8)
 
-            // Decrypts and boots SQLCipher
+            // 1. Physical RAM Pinning: Forbids Linux kernel & zRAM from swapping key to disk
+            C_mem_NativeBridge.f_mem_lockByteArray(v_passphraseBytes)
+
+            // 2. Decrypts and boots SQLCipher
             v_ui_database = C_db_VaultDatabase.f_db_getInstance(v_context, v_passphraseBytes)
             v_ui_vaultDao = v_ui_database?.f_db_vaultDao()
             v_ui_database?.openHelper?.writableDatabase?.query("SELECT count(*) FROM sqlite_master")?.close()
-            // State transition
+            
+            // 3. State transition
             v_ui_vaultState = E_ui_VaultState.UNLOCKED
             v_ui_statusMessage = ""
-            v_ui_passwordInput = "" // Clear plaintext buffer from UI
-            // Stream credentials from encrypted SQLite
+            v_ui_passwordInput = "" // Clear plaintext string from UI
+            
+            // 4. Stream credentials from encrypted SQLite
             f_ui_startStreamingCredentials()
+            
         } catch (e: Exception) {
             v_ui_statusMessage = "Decryption failed: Incorrect passphrase"
             v_ui_vaultState = E_ui_VaultState.LOCKED
             C_db_VaultDatabase.f_db_closeDatabase() 
         } finally {
             v_ui_isLoading = false
+            // 5. Hardware volatile memory wipe & RAM unpinning
+            v_passphraseBytes?.let {
+                C_mem_NativeBridge.f_mem_wipeByteArray(it)
+                C_mem_NativeBridge.f_mem_unlockByteArray(it)
+            }
         }
     }
 
