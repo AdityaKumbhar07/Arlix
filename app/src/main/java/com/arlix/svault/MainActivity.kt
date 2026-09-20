@@ -249,6 +249,10 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
         )
     }
 
+    if (v_ui_viewModel.v_ui_showColdAuthDialog) {
+        C_ui_ColdAuthDialog(v_ui_viewModel = v_ui_viewModel)
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -305,7 +309,11 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
                         MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Text("🧊 Cold Vault 🔒")
+                Text(
+                    if (v_ui_viewModel.v_ui_isColdVaultUnlocked)
+                    "🧊 Cold Vault 🔓"
+                    else "🧊 Cold Vault 🔒"
+                )
             }
         }
         if (v_ui_viewModel.v_ui_selectedChamber == E_ui_VaultChamber.HOT) {
@@ -338,9 +346,9 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
         } else {
             // Cold Vault Placeholder (Fort Knox)
             Text(
-                text = "🔐 Cold Vault Enclave (Padlocked - Step-Up Auth Pending)",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error
+                text = "🧊 Active Enclave: Cold Storage (Zero-Knowledge Enclave)",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
             )
         }
 
@@ -366,6 +374,86 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
             }
         }
     }
+}
+
+// Step-Up Authentication Dialog for Cold Vault Enclave
+@Composable
+fun C_ui_ColdAuthDialog(v_ui_viewModel: C_ui_VaultViewModel) {
+    AlertDialog(
+        onDismissRequest = {
+            v_ui_viewModel.v_ui_showColdAuthDialog = false
+            v_ui_viewModel.v_ui_selectedChamber = E_ui_VaultChamber.HOT
+        },
+        title = {
+            Text(if (!v_ui_viewModel.v_ui_isColdConfigured) "🧊 Setup Cold Vault Enclave" else "🧊 Unlock Cold Vault Enclave")
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = if (!v_ui_viewModel.v_ui_isColdConfigured)
+                        "Define a secondary passphrase for your Cold Vault. This must be different from your Hot Vault password."
+                    else
+                        "Enter your secondary Cold Vault passphrase to decrypt the enclave.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = v_ui_viewModel.v_ui_coldPasswordInput,
+                    onValueChange = { v_ui_viewModel.v_ui_coldPasswordInput = it },
+                    label = { Text("Cold Passphrase") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                )
+
+                // Confirm field only shown during initial Cold Vault setup
+                if (!v_ui_viewModel.v_ui_isColdConfigured) {
+                    OutlinedTextField(
+                        value = v_ui_viewModel.v_ui_coldConfirmPasswordInput,
+                        onValueChange = { v_ui_viewModel.v_ui_coldConfirmPasswordInput = it },
+                        label = { Text("Confirm Cold Passphrase") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                    )
+                }
+
+                if (v_ui_viewModel.v_ui_statusMessage.isNotEmpty()) {
+                    Text(
+                        text = v_ui_viewModel.v_ui_statusMessage,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (!v_ui_viewModel.v_ui_isColdConfigured) {
+                        v_ui_viewModel.f_ui_onSetupColdVaultConfirmed()
+                    } else {
+                        v_ui_viewModel.f_ui_onUnlockColdVaultConfirmed()
+                    }
+                }
+            ) {
+                Text(if (!v_ui_viewModel.v_ui_isColdConfigured) "Set Cold Passphrase" else "Unlock Enclave")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = {
+                    v_ui_viewModel.v_ui_showColdAuthDialog = false
+                    v_ui_viewModel.v_ui_selectedChamber = E_ui_VaultChamber.HOT
+                }
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 // Card layout

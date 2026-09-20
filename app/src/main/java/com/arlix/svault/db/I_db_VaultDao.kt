@@ -24,6 +24,9 @@ interface I_db_VaultDao {
     @Query("SELECT * FROM vault_entries WHERE is_deleted = 0 ORDER BY created_at DESC")
     fun f_db_getAllActiveEntries(): Flow<List<C_db_VaultEntity>>
 
+    @Query("SELECT * FROM vault_entries WHERE title = '__SHADOWVAULT_COLD_SENTINEL__' LIMIT 1")
+    suspend fun f_db_getColdSentinel(): C_db_VaultEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun f_db_insertEntry(v_entry: C_db_VaultEntity)
 

@@ -11,6 +11,7 @@ import com.arlix.svault.db.C_db_VaultDatabase
 import com.arlix.svault.db.C_db_VaultEntity
 import com.arlix.svault.db.I_db_VaultDao
 import com.arlix.svault.mem.C_mem_NativeBridge
+import com.arlix.svault.crypto.C_crypto_ColdVaultSentinel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -51,6 +52,11 @@ class C_ui_VaultViewModel : ViewModel() {
     var v_ui_isLoading by mutableStateOf(false)
     var v_ui_selectedChamber by mutableStateOf(E_ui_VaultChamber.HOT)
     var v_ui_selectedHotSection by mutableStateOf(E_ui_HotSection.GENERAL)
+    var v_ui_isColdVaultUnlocked by mutableStateOf(false)
+    var v_ui_showColdAuthDialog by mutableStateOf(false)
+    var v_ui_coldPasswordInput by mutableStateOf("")
+    var v_ui_coldConfirmPasswordInput by mutableStateOf("")
+    var v_ui_isColdConfigured by mutableStateOf(false)
 
 
     fun f_ui_startStreamingCredentials() {
@@ -62,16 +68,19 @@ class C_ui_VaultViewModel : ViewModel() {
                 v_chamber = v_ui_selectedChamber.name,
                 v_section = v_ui_selectedHotSection.name
             ).collectLatest { v_entities ->
-                v_ui_credentialsList = v_entities.map { v_entity ->
-                    C_ui_CredentialItem(
-                        v_ui_id = v_entity.v_db_id,
-                        v_ui_title = v_entity.v_db_title,
-                        v_ui_account = v_entity.v_db_account,
-                        v_ui_secret = v_entity.v_db_secret,
-                        v_ui_section = E_ui_HotSection.valueOf(v_entity.v_db_section),
-                        v_ui_chamber = E_ui_VaultChamber.valueOf(v_entity.v_db_chamber)
-                    )
-                }
+                v_ui_credentialsList = v_entities
+                    .filter { it.v_db_title != "__SHADOWVAULT_COLD_SENTINEL__" }
+                    .map { v_entity ->
+                        C_ui_CredentialItem(
+                            v_ui_id = v_entity.v_db_id,
+                            v_ui_title = v_entity.v_db_title,
+                            v_ui_account = v_entity.v_db_account,
+                            v_ui_secret = v_entity.v_db_secret,
+                            v_ui_section = E_ui_HotSection.valueOf(v_entity.v_db_section),
+                            v_ui_chamber = E_ui_VaultChamber.valueOf(v_entity.v_db_chamber)
+                        )
+                    }
+
             }
         }
     }
@@ -122,19 +131,19 @@ class C_ui_VaultViewModel : ViewModel() {
             v_ui_database = C_db_VaultDatabase.f_db_getInstance(v_context, v_passphraseBytes)
             v_ui_vaultDao = v_ui_database?.f_db_vaultDao()
             v_ui_database?.openHelper?.writableDatabase?.query("SELECT count(*) FROM sqlite_master")?.close()
-            
+
             // 3. State transition
             v_ui_vaultState = E_ui_VaultState.UNLOCKED
             v_ui_statusMessage = ""
             v_ui_passwordInput = "" // Clear plaintext string from UI
-            
+
             // 4. Stream credentials from encrypted SQLite
             f_ui_startStreamingCredentials()
-            
+
         } catch (e: Exception) {
             v_ui_statusMessage = "Decryption failed: Incorrect passphrase"
             v_ui_vaultState = E_ui_VaultState.LOCKED
-            C_db_VaultDatabase.f_db_closeDatabase() 
+            C_db_VaultDatabase.f_db_closeDatabase()
         } finally {
             v_ui_isLoading = false
             // 5. Hardware volatile memory wipe & RAM unpinning
@@ -165,8 +174,91 @@ class C_ui_VaultViewModel : ViewModel() {
     }
 
     fun f_ui_selectChamber(v_chamber: E_ui_VaultChamber) {
-        v_ui_selectedChamber = v_chamber
+        if (v_chamber == E_ui_VaultChamber.COLD) {
+            f_ui_onColdChamberClicked()
+            return
+        }
+        // Auto-Relock: Exiting Cold Vault immediately locks the enclave
+        v_ui_isColdVaultUnlocked = false
+        v_ui_selectedChamber = E_ui_VaultChamber.HOT
         f_ui_startStreamingCredentials()
+    }
+
+    fun f_ui_onColdChamberClicked() {
+        if (v_ui_isColdVaultUnlocked) {
+            v_ui_selectedChamber = E_ui_VaultChamber.COLD
+            f_ui_startStreamingCredentials()
+            return
+        }
+        viewModelScope.launch {
+            val v_sentinel = v_ui_vaultDao?.f_db_getColdSentinel()
+            v_ui_isColdConfigured = (v_sentinel != null)
+            v_ui_coldPasswordInput = ""
+            v_ui_coldConfirmPasswordInput = ""
+            v_ui_statusMessage = ""
+            v_ui_showColdAuthDialog = true
+        }
+    }
+
+    fun f_ui_onSetupColdVaultConfirmed() {
+        if (v_ui_coldPasswordInput.isBlank()) {
+            v_ui_statusMessage = "Cold Passphrase cannot be empty"
+            return
+        }
+        if (v_ui_coldPasswordInput.length < 4) {
+            v_ui_statusMessage = "Cold Passphrase must be at least 4 characters"
+            return
+        }
+        if (v_ui_coldPasswordInput != v_ui_coldConfirmPasswordInput) {
+            v_ui_statusMessage = "Passphrases do not match"
+            return
+        }
+        viewModelScope.launch {
+            val v_encoded = C_crypto_ColdVaultSentinel.f_crypto_encryptSentinel(v_ui_coldPasswordInput)
+            val v_sentinel = C_db_VaultEntity(
+                v_db_title = "__SHADOWVAULT_COLD_SENTINEL__",
+                v_db_account = "INTERNAL_ENCLAVE_SENTINEL",
+                v_db_secret = v_encoded,
+                v_db_chamber = E_ui_VaultChamber.COLD.name,
+                v_db_section = E_ui_HotSection.GENERAL.name
+            )
+            v_ui_vaultDao?.f_db_insertEntry(v_sentinel)
+            v_ui_isColdVaultUnlocked = true
+            v_ui_selectedChamber = E_ui_VaultChamber.COLD
+            v_ui_showColdAuthDialog = false
+            v_ui_coldPasswordInput = ""
+            v_ui_coldConfirmPasswordInput = ""
+            v_ui_statusMessage = ""
+            f_ui_startStreamingCredentials()
+        }
+    }
+
+    fun f_ui_onUnlockColdVaultConfirmed() {
+        if (v_ui_coldPasswordInput.isBlank()) {
+            v_ui_statusMessage = "Cold Passphrase cannot be empty"
+            return
+        }
+        viewModelScope.launch {
+            val v_sentinel = v_ui_vaultDao?.f_db_getColdSentinel()
+            if (v_sentinel == null) {
+                v_ui_isColdConfigured = false
+                return@launch
+            }
+            val v_isValid = C_crypto_ColdVaultSentinel.f_crypto_verifySentinel(
+                v_ui_coldPasswordInput,
+                v_sentinel.v_db_secret
+            )
+            if (v_isValid) {
+                v_ui_isColdVaultUnlocked = true
+                v_ui_selectedChamber = E_ui_VaultChamber.COLD
+                v_ui_showColdAuthDialog = false
+                v_ui_coldPasswordInput = ""
+                v_ui_statusMessage = ""
+                f_ui_startStreamingCredentials()
+            } else {
+                v_ui_statusMessage = "Invalid Cold Passphrase"
+            }
+        }
     }
 
     fun f_ui_selectHotSection(v_section: E_ui_HotSection) {
@@ -195,7 +287,9 @@ class C_ui_VaultViewModel : ViewModel() {
         v_ui_statusMessage = ""
         v_ui_selectedChamber = E_ui_VaultChamber.HOT
         v_ui_selectedHotSection = E_ui_HotSection.GENERAL
+        v_ui_isColdVaultUnlocked = false
+        v_ui_showColdAuthDialog = false
+        v_ui_coldPasswordInput = ""
+        v_ui_coldConfirmPasswordInput = ""
     }
-
-
 }
