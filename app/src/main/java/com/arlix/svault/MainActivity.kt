@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
+import android.os.Build
+import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -68,12 +70,16 @@ class MainActivity : ComponentActivity() {
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
         )
+        window.decorView.filterTouchesWhenObscured = true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            window.decorView.setAccessibilityDataSensitive(View.ACCESSIBILITY_DATA_SENSITIVE_YES)
+        }
         enableEdgeToEdge()
         setContent {
             ArlixTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                // Unidirectional state-driven screen switch
-                    when(v_ui_viewModel.v_ui_vaultState) {
+                    // Unidirectional state-driven screen switch
+                    when (v_ui_viewModel.v_ui_vaultState) {
                         E_ui_VaultState.LOCKED -> C_ui_LockScreen(
                             modifier = Modifier.padding(innerPadding),
                             v_ui_viewModel = v_ui_viewModel
@@ -88,9 +94,10 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
     override fun onStop() {
         super.onStop()
-        if(!isChangingConfigurations) {
+        if (!isChangingConfigurations) {
             v_ui_viewModel.f_ui_lockImmediate()
         }
     }
@@ -108,8 +115,8 @@ fun C_ui_LockScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultVie
         modifier = modifier
             .fillMaxSize()
             .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Text(
             text = "🛡️ ShadowVault",
@@ -119,15 +126,17 @@ fun C_ui_LockScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultVie
         //Password field
         OutlinedTextField(
             value = v_ui_viewModel.v_ui_passwordInput,
-            onValueChange = { v_ui_viewModel.v_ui_passwordInput = it},
-            label = { Text("Master Password")},
+            onValueChange = { v_ui_viewModel.v_ui_passwordInput = it },
+            label = { Text("Master Password") },
             singleLine = true,
             visualTransformation = if (v_ui_viewModel.v_ui_isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             trailingIcon = {
-                TextButton(onClick = {v_ui_viewModel.v_ui_isPasswordVisible = !v_ui_viewModel.v_ui_isPasswordVisible}) {
-                    Text(if(v_ui_viewModel.v_ui_isPasswordVisible) "HIDE" else "SHOW")
+                TextButton(onClick = {
+                    v_ui_viewModel.v_ui_isPasswordVisible = !v_ui_viewModel.v_ui_isPasswordVisible
+                }) {
+                    Text(if (v_ui_viewModel.v_ui_isPasswordVisible) "HIDE" else "SHOW")
                 }
             }
         )
@@ -141,8 +150,8 @@ fun C_ui_LockScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultVie
         }
         Spacer(modifier = Modifier.height(16.dp))
         Button(
-                onClick = { v_ui_viewModel.f_ui_onUnlockedClicked(v_context) },
-                modifier = Modifier.fillMaxWidth()
+            onClick = { v_ui_viewModel.f_ui_onUnlockedClicked(v_context) },
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text("Unlock Vault")
         }
@@ -152,7 +161,7 @@ fun C_ui_LockScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultVie
 // Dashboard
 
 @Composable
-fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultViewModel ){
+fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_VaultViewModel) {
 
     var v_ui_showAddDialog by remember { mutableStateOf(false) }
 
@@ -167,7 +176,9 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
     }
 
     Column(
-        modifier = modifier.fillMaxSize().padding(17.dp)
+        modifier = modifier
+            .fillMaxSize()
+            .padding(17.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -247,7 +258,7 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
             // Active section indicator text
             Text(
                 text = "Active Section: ${v_ui_viewModel.v_ui_selectedHotSection.v_ui_label}",
-            style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline
             )
         } else {
@@ -352,8 +363,17 @@ fun C_ui_CredentialCard(
                 Button(
                     onClick = {
                         val v_clipboard = v_context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        v_clipboard.setPrimaryClip(ClipData.newPlainText("secret", v_ui_item.v_ui_secret))
 
+                        // 1. Package the secret into ClipData
+                        val v_clip = ClipData.newPlainText("secret", v_ui_item.v_ui_secret).apply {
+                            // 2. Instruct Android 13+ SystemUI to suppress visual pop-up previews
+                            description.extras = android.os.PersistableBundle().apply {
+                                putBoolean("android.content.extra.IS_SENSITIVE", true)
+                            }
+                        }
+                        v_clipboard.setPrimaryClip(v_clip)
+
+                        // 3. 5-second volatile self-destruct countdown
                         v_scope.launch {
                             for (i in 5 downTo 1) {
                                 v_ui_copyCountdown = i
