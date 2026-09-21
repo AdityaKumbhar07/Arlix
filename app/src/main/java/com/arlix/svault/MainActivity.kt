@@ -355,17 +355,28 @@ fun C_ui_DashboardScreen(modifier: Modifier = Modifier, v_ui_viewModel: C_ui_Vau
         Spacer(modifier = Modifier.height(12.dp))
 
         var v_ui_expandedCardId by remember { mutableStateOf<String?>(null) }
+        val v_context = LocalContext.current
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(v_ui_viewModel.v_ui_credentialsList) { v_item ->
+                val v_isCopyingThis = (v_ui_viewModel.v_ui_clipboardCopyingId == v_item.v_ui_id)
+                val v_countdown = if (v_isCopyingThis) v_ui_viewModel.v_ui_clipboardCountdown else 0
                 C_ui_CredentialCard(
                     v_ui_item = v_item,
                     v_ui_isExpanded = (v_ui_expandedCardId == v_item.v_ui_id),
+                    v_ui_copyCountdown = v_countdown,
                     onCardClicked = {
                         v_ui_expandedCardId = if (v_ui_expandedCardId == v_item.v_ui_id) null else v_item.v_ui_id
+                    },
+                    onCopyClicked = {
+                        v_ui_viewModel.f_ui_copyToClipboardWithAutoClear(
+                            v_context = v_context,
+                            v_itemId = v_item.v_ui_id,
+                            v_secret = v_item.v_ui_secret
+                        )
                     },
                     onDeleteClicked = {
                         v_ui_viewModel.f_ui_deleteCredential(v_item.v_ui_id)
@@ -461,15 +472,13 @@ fun C_ui_ColdAuthDialog(v_ui_viewModel: C_ui_VaultViewModel) {
 fun C_ui_CredentialCard(
     v_ui_item: C_ui_CredentialItem,
     v_ui_isExpanded: Boolean,
+    v_ui_copyCountdown: Int,
     onCardClicked: () -> Unit,
+    onCopyClicked: () -> Unit,
     onDeleteClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var v_ui_isSecretVisible by remember { mutableStateOf(false) }
-    var v_ui_copyCountdown by remember { mutableIntStateOf(0) }
-
-    val v_context = LocalContext.current
-    val v_scope = rememberCoroutineScope()
 
     OutlinedCard(
         onClick = onCardClicked,
@@ -523,35 +532,13 @@ fun C_ui_CredentialCard(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Button(
-                    onClick = {
-                        val v_clipboard = v_context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-
-                        // 1. Package the secret into ClipData
-                        val v_clip = ClipData.newPlainText("secret", v_ui_item.v_ui_secret).apply {
-                            // 2. Instruct Android 13+ SystemUI to suppress visual pop-up previews
-                            description.extras = android.os.PersistableBundle().apply {
-                                putBoolean("android.content.extra.IS_SENSITIVE", true)
-                            }
-                        }
-                        v_clipboard.setPrimaryClip(v_clip)
-
-                        // 3. 5-second volatile self-destruct countdown
-                        v_scope.launch {
-                            for (i in 5 downTo 1) {
-                                v_ui_copyCountdown = i
-                                delay(1000)
-                            }
-                            v_ui_copyCountdown = 0
-                            // Physically wipes the clipboard after 5 seconds
-                            v_clipboard.setPrimaryClip(ClipData.newPlainText("", ""))
-                        }
-                    },
+                    onClick = onCopyClicked,
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = v_ui_copyCountdown == 0
+                    enabled = (v_ui_copyCountdown == 0)
                 ) {
                     Text(
-                        if (v_ui_copyCountdown > 0) "Copied ($v_ui_copyCountdown)"
-                        else "COPY (5s auto wipe)"
+                        if (v_ui_copyCountdown > 0) "Copied (${v_ui_copyCountdown}s auto-wipe)"
+                        else "COPY (10s auto wipe)"
                     )
                 }
 
