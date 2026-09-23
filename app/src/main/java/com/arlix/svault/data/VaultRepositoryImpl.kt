@@ -6,7 +6,7 @@ import com.arlix.svault.domain.IVaultRepository
 import com.arlix.svault.domain.VaultEntry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import net.sqlcipher.database.SupportFactory
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
 
@@ -19,7 +19,7 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
         val dbName = if (isColdVault) "vault_secondary.db" else "vault_primary.db"
 
         // Pass the Argon2id key directly into SQLCipher's C++ engine
-        val factory = SupportFactory(masterKey)
+        val factory = SupportOpenHelperFactory(masterKey)
 
         database = Room.databaseBuilder(context, VaultDatabase::class.java, dbName)
             .openHelperFactory(factory)

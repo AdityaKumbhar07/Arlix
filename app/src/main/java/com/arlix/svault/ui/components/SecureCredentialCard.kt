@@ -1,6 +1,7 @@
 package com.arlix.svault.ui.components
 
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build

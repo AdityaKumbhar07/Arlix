@@ -75,4 +75,8 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+
+    // Crypto and Work
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.bouncycastle)
 }
