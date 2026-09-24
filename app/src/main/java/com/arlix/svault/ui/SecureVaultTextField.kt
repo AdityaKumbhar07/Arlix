@@ -1,19 +1,15 @@
 package com.arlix.svault.ui
 
-import android.view.inputmethod.EditorInfo
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.ImeOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun SecureVaultTextField(
     value: String, // Note: We use String here only for Compose rendering, but backend keeps CharArray
@@ -28,8 +24,10 @@ fun SecureVaultTextField(
         visualTransformation = PasswordVisualTransformation(),
         modifier = modifier
             // [T3: Accessibility Blinding]
-            // This hides the exact physical layout node from rogue accessibility apps
-            .semantics { invisibleToUser() },
+            // Hides this node from the Accessibility tree so rogue accessibility scrapers
+            // (a narrow class of Android banking trojans) cannot read the field content via
+            // AccessibilityNodeInfo traversal. FLAG_SECURE handles pixel-level capture (T1).
+            .semantics { hideFromAccessibility() },
 
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Password,
