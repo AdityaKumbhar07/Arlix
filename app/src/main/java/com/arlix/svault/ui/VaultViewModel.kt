@@ -81,6 +81,14 @@ class VaultViewModel(
         if (!vaultRepository.vaultExists(isColdVault = false)) {
             _uiState.value = VaultUiState.Setup(isColdVault = false)
         }
+        viewModelScope.launch {
+            lockVaultUseCase.lockEvents.collect {
+                dbJob?.cancel()
+                dbJob = null
+                _uiState.value = if (vaultRepository.vaultExists()) VaultUiState.Locked
+                                 else VaultUiState.Setup()
+            }
+        }
     }
 
     // ---------------------------------------------------------------------------

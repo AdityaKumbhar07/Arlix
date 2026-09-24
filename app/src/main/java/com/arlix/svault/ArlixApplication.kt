@@ -10,28 +10,47 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.arlix.svault.data.VaultRepositoryImpl
 import com.arlix.svault.domain.IVaultRepository
 import com.arlix.svault.domain.usecase.LockVaultUseCase
+import com.arlix.svault.domain.usecase.UnlockVaultUseCase
+import com.arlix.svault.crypto.ShadowCryptoProvider
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.DelicateCoroutinesApi
 
 class ArlixApplication : Application(), DefaultLifecycleObserver {
 
+    lateinit var cryptoProvider: ShadowCryptoProvider
+        private set
     lateinit var vaultRepository: IVaultRepository
         private set
     lateinit var lockUseCase: LockVaultUseCase
+        private set
+    lateinit var unlockUseCase: UnlockVaultUseCase
         private set
 
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Intent.ACTION_SCREEN_OFF) {
-                // Reuse the same runBlocking approach as onStop, same fast-operation justification.
-                runBlocking { lockUseCase() }
+                val pendingResult = goAsync()
+                @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        lockUseCase()
+                    } finally {
+                        pendingResult.finish()
+                    }
+                }
             }
         }
     }
 
     override fun onCreate() {
         super<Application>.onCreate()
+        cryptoProvider = ShadowCryptoProvider()
         vaultRepository = VaultRepositoryImpl(applicationContext)
         lockUseCase = LockVaultUseCase(vaultRepository)
+        unlockUseCase = UnlockVaultUseCase(cryptoProvider, vaultRepository)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
         
         // Register receiver for ACTION_SCREEN_OFF at runtime (cannot be in manifest)

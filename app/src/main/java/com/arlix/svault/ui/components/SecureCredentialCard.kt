@@ -83,22 +83,17 @@ fun SecureCredentialCard(
                     val clipToken = UUID.randomUUID().toString()
 
                     val clipboardText = String(passwordSecret)
-                    try {
-                        val clip = ClipData.newPlainText("password", clipboardText)
-                        
-                        // [T16: Keyboard Clipboard History] — Tell Android 13+ keyboards NOT to
-                        // show this entry in their visual clipboard history tab
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            clip.description.extras = PersistableBundle().apply {
-                                putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
-                            }
+                    // Note: Cannot wipe a String's backing char[] in standard JVM; this minimal-lifetime local is unavoidable.
+                    val clip = ClipData.newPlainText("password", clipboardText)
+                    
+                    // [T16: Keyboard Clipboard History] — Tell Android 13+ keyboards NOT to
+                    // show this entry in their visual clipboard history tab
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        clip.description.extras = PersistableBundle().apply {
+                            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
                         }
-                        clipboard.setPrimaryClip(clip)
-                    } finally {
-                        // Cannot wipe a String's backing char[] in standard JVM (String interning /
-                        // immutability), but scoping it to this single try block minimizes the
-                        // reference's lifetime to the smallest possible span before it's eligible for GC.
                     }
+                    clipboard.setPrimaryClip(clip)
 
                     // [T2: Clipboard Wipe] — Schedule a background wipe in 10 seconds.
                     // WorkManager is the correct tool here: it survives process death and OEM

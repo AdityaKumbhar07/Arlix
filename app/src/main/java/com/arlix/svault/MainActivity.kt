@@ -29,18 +29,12 @@ import com.arlix.svault.ui.theme.ArlixTheme
 
 class MainActivity : ComponentActivity() {
 
-    // Manual Dependency Injection
-    private val cryptoProvider by lazy { ShadowCryptoProvider() }
-    private val vaultRepository by lazy { VaultRepositoryImpl(applicationContext) }
-
-    private val unlockVaultUseCase by lazy { UnlockVaultUseCase(cryptoProvider, vaultRepository) }
-    private val lockVaultUseCase by lazy { LockVaultUseCase(vaultRepository) }
-
     private val viewModel: VaultViewModel by viewModels {
+        val app = application as ArlixApplication
         VaultViewModel.Factory(
-            unlockVaultUseCase,
-            lockVaultUseCase,
-            vaultRepository,
+            app.unlockUseCase,
+            app.lockUseCase,
+            app.vaultRepository,
             com.arlix.svault.crypto.SaltGenerator.getSalt(applicationContext)
         )
     }
@@ -62,25 +56,7 @@ class MainActivity : ComponentActivity() {
         // [T4] Drop touch events when an invisible overlay is detected on top of the app.
         window.decorView.rootView.filterTouchesWhenObscured = true
 
-        // --- [T7] SMART VAULT AUTO-LOCK via ProcessLifecycleOwner ---
-        //
-        // WHY NOT onPause()?
-        // Activity.onPause() fires on ANY window-focus loss — including when a Compose
-        // AlertDialog opens and the IME briefly steals focus. This caused the vault to lock
-        // the instant the Cold Vault dialog appeared, or right after the UNLOCK button
-        // was tapped and the keyboard dismissed (Bugs 3 & 4 from the original audit).
-        //
-        // WHY ProcessLifecycleOwner.ON_STOP?
-        // Fires only when the whole app genuinely goes to the background (home button,
-        // task switch, screen lock). Internal focus flickers between our own Compose
-        // dialogs and the IME do NOT trigger it.
-        ProcessLifecycleOwner.get().lifecycle.addObserver(
-            LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_STOP) {
-                    viewModel.lock()
-                }
-            }
-        )
+
 
         setContent {
             ArlixTheme {
