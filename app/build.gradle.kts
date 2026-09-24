@@ -6,9 +6,7 @@ plugins {
 
 android {
     namespace = "com.arlix.svault"
-    compileSdk {
-        version = release(37)
-    }
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.arlix.svault"
@@ -27,9 +25,7 @@ android {
 
     buildTypes {
         release {
-            optimization {
-                enable = false
-            }
+            isMinifyEnabled = false
         }
     }
     compileOptions {
@@ -38,6 +34,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     externalNativeBuild {
         cmake {
@@ -82,5 +79,4 @@ dependencies {
     // Crypto and Work
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.bouncycastle)
-    implementation(libs.androidx.security.crypto)
 }

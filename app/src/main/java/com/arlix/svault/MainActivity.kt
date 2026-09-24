@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
             app.unlockUseCase,
             app.lockUseCase,
             app.vaultRepository,
-            com.arlix.svault.crypto.SaltGenerator.getSalt(applicationContext)
+            saltProvider = { isCold -> com.arlix.svault.crypto.SaltGenerator.getSalt(applicationContext, isCold) }
         )
     }
 

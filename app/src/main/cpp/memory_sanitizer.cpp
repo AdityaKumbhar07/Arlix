@@ -8,45 +8,41 @@
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_arlix_svault_crypto_MemorySanitizer_wipeNative(JNIEnv *env, jobject thiz, jbyteArray array) {
+Java_com_arlix_svault_crypto_MemorySanitizer_wipeNative___3B(JNIEnv *env, jobject thiz, jbyteArray array) {
     if (array == nullptr) return;
 
     jsize len = env->GetArrayLength(array);
     if (len == 0) return;
 
-    // Pin the byte array in memory so the Kotlin GC doesn't move it during the wipe
-    jbyte *buffer = env->GetByteArrayElements(array, nullptr);
+    // Pin the byte array in memory using GetPrimitiveArrayCritical to guarantee a direct pointer
+    // without copying the array, ensuring the actual JVM heap memory is wiped.
+    //
+    // CRITICAL CONSTRAINT: Nothing between GetPrimitiveArrayCritical and ReleasePrimitiveArrayCritical
+    // may call back into JNI, allocate memory, or block. Doing so could suspend the GC and cause
+    // a deadlock or application freeze.
+    void *buffer = env->GetPrimitiveArrayCritical(array, nullptr);
     if (buffer == nullptr) return;
 
-    // [T13/T15] Best-effort: ask the kernel to pin these pages out of ZRAM/swap.
-    // On stock non-root Android, RLIMIT_MEMLOCK is often as low as 64KB for the whole process.
-    // mlock() will return EPERM or ENOMEM when that limit is exceeded — this is expected and
-    // non-fatal. We log it so you can see it in logcat, but we always proceed with the wipe.
-    // The volatile-write wipe below is the real defense; mlock is a best-effort bonus.
     int mlock_result = mlock(buffer, static_cast<size_t>(len));
-    if (mlock_result != 0) {
-        __android_log_print(ANDROID_LOG_WARN, LOG_TAG,
-            "mlock() failed (errno=%d). Memory page may be swappable. "
-            "This is expected on most non-root Android devices due to RLIMIT_MEMLOCK. "
-            "Volatile wipe will still run.", errno);
-    }
+    int mlock_errno = (mlock_result != 0) ? errno : 0;   // capture, don't log yet
 
-    // [T13] Silicon-level annihilation:
-    // Volatile pointer write loop + asm compiler barrier prevents LLVM/Clang from
-    // treating this as a dead store and optimising it away (a real, documented CVE class
-    // — see OpenSSL historical memset() elision issues).
-    volatile unsigned char* v_ptr = static_cast<volatile unsigned char*>(static_cast<void*>(buffer));
+    volatile unsigned char* v_ptr = static_cast<volatile unsigned char*>(buffer);
     for (jsize i = 0; i < len; ++i) {
         v_ptr[i] = 0x00;
     }
-    // Memory clobber barrier: forbids the compiler from reordering or removing the writes above
     asm volatile("" : : "r"(buffer) : "memory");
 
-    // Only unlock if we successfully locked (don't log spurious munlock failures)
     if (mlock_result == 0) {
         munlock(buffer, static_cast<size_t>(len));
     }
 
-    // Release back to Kotlin JVM. The second arg '0' means: copy changes back AND free the buffer.
-    env->ReleaseByteArrayElements(array, buffer, 0);
+    env->ReleasePrimitiveArrayCritical(array, buffer, 0);
+
+    // Logging happens AFTER the critical section ends — GetPrimitiveArrayCritical's
+    // contract forbids calling back into JNI/allocating/blocking while pinned.
+    if (mlock_result != 0) {
+        __android_log_print(ANDROID_LOG_WARN, LOG_TAG,
+            "mlock() failed (errno=%d) during wipe. Page may have been swappable for the "
+            "duration of this call. Volatile wipe still completed.", mlock_errno);
+    }
 }

@@ -126,7 +126,7 @@ fun DashboardScreen(
                 onDismissColdVaultError()
             },
             title = {
-                Text("Advanced Security") // Deliberately generic title (plausible deniability)
+                Text("Advanced Security") // UI-level discretion only — prevents casual/shoulder-surfing discovery. Does NOT provide forensic-grade deniability; the existence of vault_secondary.db is discoverable by anyone with filesystem access. Explicitly out of scope.
             },
             text = {
                 Column {

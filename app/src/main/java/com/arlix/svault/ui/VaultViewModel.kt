@@ -54,11 +54,16 @@ class VaultViewModel(
     private val unlockVaultUseCase: UnlockVaultUseCase,
     private val lockVaultUseCase: LockVaultUseCase,
     private val vaultRepository: IVaultRepository,
-    private val salt: ByteArray
+    private val saltProvider: (isColdVault: Boolean) -> ByteArray
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<VaultUiState>(VaultUiState.Locked)
     val uiState: StateFlow<VaultUiState> = _uiState.asStateFlow()
+
+    /** Wipes every password CharArray in a list before the list reference is dropped. */
+    private fun wipeEntries(entries: List<VaultEntry>) {
+        entries.forEach { it.annihilate() }
+    }
 
     /**
      * Cold vault operation error — used ONLY for errors that happen while the user is
@@ -85,6 +90,8 @@ class VaultViewModel(
             lockVaultUseCase.lockEvents.collect {
                 dbJob?.cancel()
                 dbJob = null
+                wipeEntries(currentEntries)
+                currentEntries = emptyList()
                 _uiState.value = if (vaultRepository.vaultExists()) VaultUiState.Locked
                                  else VaultUiState.Setup()
             }
@@ -145,13 +152,14 @@ class VaultViewModel(
 
         viewModelScope.launch {
             try {
-                unlockVaultUseCase(password, salt, isColdVault = false)
+                unlockVaultUseCase(password, saltProvider(false), isColdVault = false)
                 // password is zeroed inside UnlockVaultUseCase's finally block
 
                 dbJob?.cancel()
                 dbJob = viewModelScope.launch {
                     try {
                         vaultRepository.getAllEntries().collect { entries ->
+                            wipeEntries(currentEntries)
                             currentEntries = entries
                             if (_uiState.value !is VaultUiState.AddingCredential) {
                                 _uiState.value = VaultUiState.Unlocked(entries, isColdVault = false)
@@ -205,13 +213,14 @@ class VaultViewModel(
         viewModelScope.launch {
             try {
                 // This closes the hot vault and opens the cold vault (Dispatchers.IO inside UseCase)
-                unlockVaultUseCase(password, salt, isColdVault = true)
+                unlockVaultUseCase(password, saltProvider(true), isColdVault = true)
 
                 // Success: transition to Cold Vault Dashboard
                 dbJob?.cancel()
                 dbJob = viewModelScope.launch {
                     try {
                         vaultRepository.getAllEntries().collect { entries ->
+                            wipeEntries(currentEntries)
                             currentEntries = entries
                             if (_uiState.value !is VaultUiState.AddingCredential) {
                                 _uiState.value = VaultUiState.Unlocked(entries, isColdVault = true)
@@ -242,12 +251,8 @@ class VaultViewModel(
     // ---------------------------------------------------------------------------
 
     fun lock() {
-        dbJob?.cancel()
-        dbJob = null
         viewModelScope.launch {
             lockVaultUseCase()
-            _uiState.value = if (vaultRepository.vaultExists()) VaultUiState.Locked
-                             else VaultUiState.Setup()
         }
     }
 
@@ -280,15 +285,23 @@ class VaultViewModel(
                 val currentState = _uiState.value
                 val isColdVault = if (currentState is VaultUiState.AddingCredential) currentState.isColdVault else false
                 vaultRepository.addEntry(entry)
+                entry.annihilate()
                 if (_uiState.value !is VaultUiState.Locked) {
                     _uiState.value = VaultUiState.Unlocked(currentEntries, isColdVault)
                 }
             } catch (e: Exception) {
+                entry.annihilate()
                 if (_uiState.value !is VaultUiState.Locked) {
                     _uiState.value = VaultUiState.Error("Failed to save credential.")
                 }
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        wipeEntries(currentEntries)
+        currentEntries = emptyList()
     }
 
     // ---------------------------------------------------------------------------
@@ -299,10 +312,10 @@ class VaultViewModel(
         private val unlockVaultUseCase: UnlockVaultUseCase,
         private val lockVaultUseCase: LockVaultUseCase,
         private val vaultRepository: IVaultRepository,
-        private val salt: ByteArray
+        private val saltProvider: (isColdVault: Boolean) -> ByteArray
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            VaultViewModel(unlockVaultUseCase, lockVaultUseCase, vaultRepository, salt) as T
+            VaultViewModel(unlockVaultUseCase, lockVaultUseCase, vaultRepository, saltProvider) as T
     }
 }
