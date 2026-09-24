@@ -26,16 +26,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # System.loadLibrary() and pass the name of the library defined here;
 # for GameActivity/NativeActivity derived applications, the same library name must be
 # used in the AndroidManifest.xml file.
-add_library(${CMAKE_PROJECT_NAME} SHARED
+add_library(memory_sanitizer SHARED
     # List C/C++ source files with relative paths to this CMakeLists.txt.
-        shadowvault_core.cpp)
+        memory_sanitizer.cpp)
 
-        target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra -O3)
+target_compile_options(memory_sanitizer PRIVATE -Wall -Wextra -O3)
 
 # Specifies libraries CMake should link to your target library. You
 # can link libraries from various origins, such as libraries defined in this
 # build script, prebuilt third-party libraries, or Android system libraries.
-target_link_libraries(${CMAKE_PROJECT_NAME}
+target_link_libraries(memory_sanitizer
     # List libraries link to the target library
     android
     log)
