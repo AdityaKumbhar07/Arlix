@@ -12,6 +12,13 @@ import com.arlix.svault.ui.SecureVaultTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 
+import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
+import android.provider.Settings
+import android.view.inputmethod.InputMethodManager
+import androidx.compose.ui.platform.LocalContext
+
 /**
  * Covers two distinct modes in one composable:
  *
@@ -28,6 +35,26 @@ import androidx.compose.material.icons.filled.Lock
  * Keeping both modes in one composable avoids a Crossfade flicker between two nearly-identical
  * screens, and the visual difference (one field vs two fields + heading copy) is minimal.
  */
+@Composable
+private fun rememberIsThirdPartyImeActive(): Boolean {
+    val context = LocalContext.current
+    return remember {
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        val currentImeId = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+        val currentIme = imm.enabledInputMethodList.find { it.id == currentImeId }
+        val packageName = currentIme?.packageName
+        val isSystemApp = packageName?.let {
+            try {
+                val appInfo = context.packageManager.getApplicationInfo(it, 0)
+                (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+            } catch (e: PackageManager.NameNotFoundException) {
+                false
+            }
+        } ?: false
+        !isSystemApp
+    }
+}
+
 @Composable
 fun LockScreen(
     uiState: VaultUiState,
@@ -71,6 +98,16 @@ fun LockScreen(
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        val isThirdPartyIme = rememberIsThirdPartyImeActive()
+        if (isThirdPartyIme) {
+            Text(
+                text = "⚠ A third-party keyboard is active. It may log keystrokes.",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         // Primary passphrase field
         SecureVaultTextField(

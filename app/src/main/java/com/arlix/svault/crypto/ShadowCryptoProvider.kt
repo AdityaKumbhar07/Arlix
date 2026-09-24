@@ -20,14 +20,13 @@ class ShadowCryptoProvider : ICryptoProvider {
             val result = ByteArray(32) // 256-bit key output
 
             // [T8]: Argon2id — Memory-hard KDF. Each guess costs 64 MB of RAM + 3 sequential passes.
-            // This is deliberately low-end for v1. For maximum offline brute-force resistance,
-            // raise withMemoryAsKB to e.g. 262144 (256 MB) once device benchmarks confirm it's
-            // within the ANR threshold on the Vivo T3x. OWASP 2024 recommends ≥19 MB minimum;
-            // 64 MB is reasonable but not "mathematically infeasible" for weak passphrases.
+            // This is kept at 64 MB for initial QA testing; will be bumped based on actual QA
+            // device benchmarks (e.g. up to 256MB) to ensure it stays within the ANR threshold
+            // on reference low-end devices like the Vivo T3x.
             val parameters = Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
                 .withVersion(Argon2Parameters.ARGON2_VERSION_13)
                 .withIterations(3)
-                .withMemoryAsKB(65536) // 64 MB — bump to 262144 after T3x benchmarking
+                .withMemoryAsKB(65536)
                 .withParallelism(4)
                 .withSalt(salt)
                 .build()
@@ -99,10 +98,26 @@ class ShadowCryptoProvider : ICryptoProvider {
  *
  * The caller is responsible for calling wipe() on the returned ByteArray after use.
  */
-internal fun charArrayToUtf8Bytes(chars: CharArray): ByteArray {
+fun charArrayToUtf8Bytes(chars: CharArray): ByteArray {
     val cb: CharBuffer = CharBuffer.wrap(chars)
     val bb: ByteBuffer = Charsets.UTF_8.newEncoder().encode(cb)
     val bytes = ByteArray(bb.limit())
     bb.get(bytes)
     return bytes
+}
+
+/**
+ * Constant-time comparison for sensitive character arrays (e.g., passwords).
+ * Mitigates timing side-channel attacks (T9).
+ */
+fun constantTimeEquals(a: CharArray, b: CharArray): Boolean {
+    if (a.size != b.size) return false
+    val aBytes = charArrayToUtf8Bytes(a)
+    val bBytes = charArrayToUtf8Bytes(b)
+    try {
+        return java.security.MessageDigest.isEqual(aBytes, bBytes)
+    } finally {
+        aBytes.fill(0)
+        bBytes.fill(0)
+    }
 }

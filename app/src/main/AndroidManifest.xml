@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <application
+        android:name=".ArlixApplication"
         android:allowBackup="false"
         android:extractNativeLibs="false"
         android:dataExtractionRules="@xml/data_extraction_rules"

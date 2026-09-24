@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.arlix.svault.crypto.constantTimeEquals
 
 // ---------------------------------------------------------------------------
 // UI State — represents every screen the user can be on
@@ -96,7 +97,7 @@ class VaultViewModel(
             confirmPassword.fill('\u0000')
             return
         }
-        if (!password.contentEquals(confirmPassword)) {
+        if (!constantTimeEquals(password, confirmPassword)) {
             val msg = "Passphrases do not match. Please try again."
             if (isColdVault) _coldVaultError.value = msg           // Bug 1a fix: stay on Dashboard
             else _uiState.value = VaultUiState.Error(msg)

@@ -31,12 +31,14 @@ fun SecureVaultTextField(
 
         keyboardOptions = KeyboardOptions(
             keyboardType = KeyboardType.Password,
+            autoCorrectEnabled = false
         ).apply {
             // [T5: Rogue Keyboard Defense]
-            // We cannot inject EditorInfo flags directly into Compose KeyboardOptions yet without
-            // a custom ImeAction, but setting KeyboardType.Password naturally applies
-            // TYPE_TEXT_VARIATION_PASSWORD to the OS keyboard, which intrinsically blocks
-            // legitimate keyboards (like Gboard) from saving the words to their dictionary.
+            // KeyboardType.Password triggers standard Android IME password-mode behavior,
+            // which suppresses personalized-learning dictionary insertion on compliant keyboards
+            // (Gboard and most AOSP-derived IMEs). No additional explicit IME_FLAG_NO_PERSONALIZED_LEARNING
+            // injection — not exposed by current Compose KeyboardOptions API without disproportionate
+            // interop complexity for the marginal gain.
         }
     )
 }

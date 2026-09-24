@@ -36,9 +36,10 @@ class UnlockVaultUseCase(
         salt: ByteArray,
         isColdVault: Boolean = false
     ): Boolean {
+        var masterKey: ByteArray? = null
         try {
             // CPU-bound: Argon2id key derivation (internally runs on Dispatchers.Default)
-            val masterKey = cryptoProvider.deriveMasterKey(password, salt)
+            masterKey = cryptoProvider.deriveMasterKey(password, salt)
 
             // IO-bound: pass the derived key to SQLCipher for file-level decryption
             return withContext(ioDispatcher) {
@@ -47,6 +48,7 @@ class UnlockVaultUseCase(
         } finally {
             // Zero the caller's password CharArray on ALL exit paths — success, exception, everything.
             password.fill('\u0000')
+            masterKey?.let { cryptoProvider.wipe(it) }
         }
     }
 }

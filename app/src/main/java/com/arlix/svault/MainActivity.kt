@@ -1,57 +1,166 @@
 package com.arlix.svault
 
 import android.os.Bundle
+import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.ProcessLifecycleOwner
+import com.arlix.svault.crypto.ShadowCryptoProvider
+import com.arlix.svault.data.VaultRepositoryImpl
+import com.arlix.svault.domain.usecase.LockVaultUseCase
+import com.arlix.svault.domain.usecase.UnlockVaultUseCase
+import com.arlix.svault.ui.VaultUiState
+import com.arlix.svault.ui.VaultViewModel
+import com.arlix.svault.ui.screens.AddCredentialScreen
+import com.arlix.svault.ui.screens.DashboardScreen
+import com.arlix.svault.ui.screens.LockScreen
+import com.arlix.svault.ui.theme.ArlixTheme
 
 class MainActivity : ComponentActivity() {
+
+    // Manual Dependency Injection
+    private val cryptoProvider by lazy { ShadowCryptoProvider() }
+    private val vaultRepository by lazy { VaultRepositoryImpl(applicationContext) }
+
+    private val unlockVaultUseCase by lazy { UnlockVaultUseCase(cryptoProvider, vaultRepository) }
+    private val lockVaultUseCase by lazy { LockVaultUseCase(vaultRepository) }
+
+    private val viewModel: VaultViewModel by viewModels {
+        VaultViewModel.Factory(
+            unlockVaultUseCase,
+            lockVaultUseCase,
+            vaultRepository,
+            com.arlix.svault.crypto.SaltGenerator.getSalt(applicationContext)
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // [T1: Screen Capture & Background Snapshot Defense]
-        // This makes the app show as a pure black square in the Recent Apps menu,
-        // and blocks all screen recording/screenshots from the OS.
+        // --- OS ARMOR ---
+
+        // [T1] Block screenshots and recent-app carousel snapshots at the OS level.
         window.setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE
         )
 
+        // [T17] Block Trojan Autofill malware from reading field values via AutofillService
+        window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+
+        // [T4] Drop touch events when an invisible overlay is detected on top of the app.
+        window.decorView.rootView.filterTouchesWhenObscured = true
+
+        // --- [T7] SMART VAULT AUTO-LOCK via ProcessLifecycleOwner ---
+        //
+        // WHY NOT onPause()?
+        // Activity.onPause() fires on ANY window-focus loss — including when a Compose
+        // AlertDialog opens and the IME briefly steals focus. This caused the vault to lock
+        // the instant the Cold Vault dialog appeared, or right after the UNLOCK button
+        // was tapped and the keyboard dismissed (Bugs 3 & 4 from the original audit).
+        //
+        // WHY ProcessLifecycleOwner.ON_STOP?
+        // Fires only when the whole app genuinely goes to the background (home button,
+        // task switch, screen lock). Internal focus flickers between our own Compose
+        // dialogs and the IME do NOT trigger it.
+        ProcessLifecycleOwner.get().lifecycle.addObserver(
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_STOP) {
+                    viewModel.lock()
+                }
+            }
+        )
+
         setContent {
-            MaterialTheme {
-                // [T4: Tapjacking Defense]
-                // filterTouchesWhenObscured drops all touches if an invisible overlay
-                // is drawn on top of our app.
+            ArlixTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
-                    content = {
-                        Text(text = "Vault Engine Ready.")
-                        // (We will hook up the actual UI here in the next steps!)
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val uiState by viewModel.uiState.collectAsState()
+
+                    // coldVaultError is a separate StateFlow — errors from cold vault operations
+                    // that should be shown in the Dashboard dialog rather than on the LockScreen.
+                    val coldVaultError by viewModel.coldVaultError.collectAsState()
+
+                    Crossfade(targetState = uiState, label = "ScreenTransition") { state ->
+                        when (state) {
+
+                            // --- First-launch: vault DB does not exist yet ---
+                            is VaultUiState.Setup -> {
+                                LockScreen(
+                                    uiState = state,
+                                    onUnlock = { password ->
+                                        viewModel.unlock(password, isColdVault = false)
+                                    },
+                                    onCreateVault = { password, confirm ->
+                                        viewModel.createVault(password, confirm, state.isColdVault)
+                                    }
+                                )
+                            }
+
+                            // --- Lock / in-progress / error — all handled by LockScreen ---
+                            is VaultUiState.Locked,
+                            is VaultUiState.Unlocking,
+                            is VaultUiState.Error -> {
+                                LockScreen(
+                                    uiState = state,
+                                    onUnlock = { password ->
+                                        viewModel.unlock(password, isColdVault = false)
+                                    },
+                                    onCreateVault = { _, _ -> /* Not applicable in Locked state */ }
+                                )
+                            }
+
+                            // --- Vault is open: show credential dashboard ---
+                            is VaultUiState.Unlocked -> {
+                                DashboardScreen(
+                                    entries = state.entries,
+                                    isColdVault = state.isColdVault,
+                                    coldVaultExists = viewModel.coldVaultExists(),
+                                    // coldVaultError flows inline into the dialog (Bug 1a fix)
+                                    coldVaultError = coldVaultError,
+                                    onLock = { viewModel.lock() },
+                                    onColdVaultUnlock = { coldPassword ->
+                                        viewModel.unlock(coldPassword, isColdVault = true)
+                                    },
+                                    onColdVaultCreate = { coldPassword, confirm ->
+                                        viewModel.createVault(coldPassword, confirm, isColdVault = true)
+                                    },
+                                    onDismissColdVaultError = { viewModel.clearColdVaultError() },
+                                    onAddClicked = { viewModel.navigateToAddCredential(state.isColdVault) }
+                                )
+                            }
+
+                            // --- Add Credential form ---
+                            is VaultUiState.AddingCredential -> {
+                                AddCredentialScreen(
+                                    onSave = { entry -> viewModel.addCredential(entry) },
+                                    onCancel = { viewModel.cancelAddCredential(state.isColdVault) }
+                                )
+                            }
+                        }
                     }
-                )
+                }
             }
         }
-
-        // Ensure the root view also rejects obscured touches
-        window.decorView.rootView.filterTouchesWhenObscured = true
-        // [T17: Trojan Autofill Ban]
-        // Explicitly forbids the Android OS Autofill system from reading or interacting with our UI tree.
-        window.decorView.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
     }
 
     override fun onPause() {
         super.onPause()
-        // [T7: Physical Snatch / T4: Overlay Pause Attack]
-        // The instant the app loses perfect foreground focus (e.g., pulling down
-        // the notification shade, screen turning off, or an overlay appearing),
-        // we must command the LockVaultUseCase to instantly wipe the keys.
-
-        // TODO: Call LockVaultUseCase() here when we wire up our Dependency Injection!
+        // ProcessLifecycleOwner.ON_STOP is the primary lock signal (see above).
+        // onPause() is intentionally left as a no-op — it fires on dialog/IME focus flickers
+        // that we explicitly do NOT want to trigger a vault lock.
     }
 }
