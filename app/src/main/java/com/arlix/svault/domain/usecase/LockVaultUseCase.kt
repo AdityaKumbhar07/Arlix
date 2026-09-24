@@ -11,6 +11,7 @@ class LockVaultUseCase(
     suspend operator fun invoke() {
         // Closes the DB and commands SQLCipher to purge keys from its C++ memory
         vaultRepository.closeVault()
+        // NOTE: manual lock() also triggers this collector via its own lockEvents.tryEmit — redundant but harmless double state-write, not a bug.
         _lockEvents.tryEmit(Unit)
     }
 }

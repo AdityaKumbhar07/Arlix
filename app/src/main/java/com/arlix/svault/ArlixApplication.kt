@@ -14,9 +14,9 @@ import com.arlix.svault.domain.usecase.UnlockVaultUseCase
 import com.arlix.svault.crypto.ShadowCryptoProvider
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.DelicateCoroutinesApi
 
 class ArlixApplication : Application(), DefaultLifecycleObserver {
 
@@ -29,12 +29,13 @@ class ArlixApplication : Application(), DefaultLifecycleObserver {
     lateinit var unlockUseCase: UnlockVaultUseCase
         private set
 
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == Intent.ACTION_SCREEN_OFF) {
                 val pendingResult = goAsync()
-                @OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
-                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                applicationScope.launch {
                     try {
                         lockUseCase()
                     } finally {

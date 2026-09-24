@@ -158,10 +158,12 @@ class VaultViewModel(
                             }
                         }
                     } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
                         _uiState.value = VaultUiState.Error("Vault read error. Please re-unlock.")
                     }
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 // [Bug 2 fix] DON'T call lock() here.
                 //
                 // The old code called lock() immediately after setting Error state. lock() launches
@@ -216,10 +218,12 @@ class VaultViewModel(
                             }
                         }
                     } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
                         _coldVaultError.value = "Failed to load cold vault entries."
                     }
                 }
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 // Cold vault open failed. openVault() already called closeVault() first,
                 // so the hot vault is also now closed. Both vaults are in a closed state.
                 // We must go to Locked so the user can re-authenticate.
