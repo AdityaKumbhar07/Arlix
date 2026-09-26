@@ -8,7 +8,7 @@
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_arlix_svault_crypto_MemorySanitizer_wipeNative___3B(JNIEnv *env, jobject thiz, jbyteArray array) {
+Java_com_arlix_svault_crypto_MemorySanitizer_wipeNative(JNIEnv *env, jobject thiz, jbyteArray array) {
     if (array == nullptr) return;
 
     jsize len = env->GetArrayLength(array);

@@ -13,9 +13,11 @@ object MemorySanitizer {
         try {
             // Loads the C++ shared library (memory_sanitizer.so) at class-load time
             System.loadLibrary("memory_sanitizer")
+            android.util.Log.d("SHADOW_VAULT_JNI", "System.loadLibrary completed without error")
         } catch (e: UnsatisfiedLinkError) {
             // Expected during host-JVM unit tests where no .so is available.
             // wipeNative() falls back to buffer.fill(0) in that case (see ShadowCryptoProvider.wipe).
+            android.util.Log.e("SHADOW_VAULT_JNI", "FAILED to load memory_sanitizer.so", e)
         }
     }
 
@@ -41,7 +43,9 @@ object MemorySanitizer {
         val bytes = charArrayToUtf8Bytes(array)   // NIO — no String object on heap
         try {
             wipeNative(bytes)
+            android.util.Log.d("SHADOW_VAULT_JNI", "wipeNative call returned without UnsatisfiedLinkError")
         } catch (e: UnsatisfiedLinkError) {
+            android.util.Log.e("SHADOW_VAULT_JNI", "UnsatisfiedLinkError: Native wipe FAILED! Falling back to fill(0).", e)
             bytes.fill(0)
         } finally {
             array.fill('\u0000')
