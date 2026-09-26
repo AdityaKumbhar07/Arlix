@@ -5,7 +5,7 @@ import java.util.UUID
 /**
  * Core Domain Entity representing a single saved credential.
  *
- * SECURITY RULE [T11]: The password MUST be a CharArray.
+ * [T11] The password MUST be a CharArray (mutable buffer) so we can surgically annihilate it later.
  * Standard Strings are immutable and cannot be safely wiped from the JVM heap.
  */
 data class VaultEntry(
@@ -13,7 +13,6 @@ data class VaultEntry(
     val title: String,
     val username: String,
     val notes: String,
-    // The password is held in a mutable buffer so we can surgically annihilate it later.
     val passwordSecret: CharArray,
     val createdAt: Long = System.currentTimeMillis(),
     val modifiedAt: Long = System.currentTimeMillis()

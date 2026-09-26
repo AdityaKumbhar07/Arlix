@@ -103,7 +103,7 @@ class VaultViewModel(
     // ---------------------------------------------------------------------------
 
     fun createVault(password: CharArray, confirmPassword: CharArray, isColdVault: Boolean = false) {
-        // [T20] Passphrase strength check — at creation time only, not on every unlock
+        // [T20] Passphrase strength checked at creation only.
         if (password.size < 5) {
             val msg = "Passphrase must be at least 5 characters."
             if (isColdVault) _coldVaultError.value = msg           // Bug 1a fix: stay on Dashboard
@@ -172,15 +172,7 @@ class VaultViewModel(
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                // [Bug 2 fix] DON'T call lock() here.
-                //
-                // The old code called lock() immediately after setting Error state. lock() launches
-                // a coroutine that overwrites Error with Locked in the next frame — the error
-                // message was visible for ~1 frame and then vanished before the user could read it.
-                //
-                // The DB is already closed: openVault() calls closeVault() as its very first line,
-                // so if openVault() throws, the vault is already in a closed state. We don't need
-                // to call lock() — just show the error and let the user retry.
+                // DB is already closed; show error without calling lock() to prevent UI race.
                 _uiState.value = VaultUiState.Error("Incorrect Password or Corrupted Vault.")
             }
         }
@@ -191,20 +183,10 @@ class VaultViewModel(
     // ---------------------------------------------------------------------------
 
     /**
-     * Unlocks or creates the Cold Vault WITHOUT navigating away from the Dashboard.
+     * Unlocks or creates the Cold Vault without triggering LockScreen navigation.
      *
-     * BUG 1 ROOT CAUSE (fixed here):
-     * The old implementation called unlockInternal(isColdVault=true) which set
-     * VaultUiState.Unlocking as its first action. MainActivity maps Unlocking → LockScreen.
-     * So every cold vault attempt immediately navigated to the lock screen — regardless of
-     * whether the password was correct.
-     *
-     * This path does NOT touch _uiState during the operation. Errors go to _coldVaultError
-     * (shown inline in the dialog). Success transitions to Unlocked(cold vault) as intended.
-     *
-     * IMPORTANT: openVault() closes the hot vault before opening the cold vault. If the cold
-     * vault open fails, both vaults are now closed. In that case, we fall back to Locked state
-     * so the user can re-enter their hot vault password.
+     * Success transitions to Unlocked(cold vault).
+     * Failure transitions to Locked because the hot vault was already closed by openVault().
      */
     private fun unlockColdVaultInternal(password: CharArray) {
         coldVaultInProgress = true

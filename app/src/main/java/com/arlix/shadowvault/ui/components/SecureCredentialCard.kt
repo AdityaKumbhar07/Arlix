@@ -32,11 +32,7 @@ fun SecureCredentialCard(
 
     var isRevealed by remember { mutableStateOf(false) }
 
-    // [T6 Bug fix] We track the active reveal job so we can cancel it before starting a new one.
-    // Without this, tapping SHOW multiple times spawns multiple "hide after 5 seconds" coroutines
-    // that all fire independently — the first one can hide the password early while the user
-    // expects 5 more seconds of visibility from their most recent tap. Cancelling the previous
-    // job before launching a new one makes the 5-second timer reset cleanly on every tap.
+    // [T6] Tracks the active reveal job to reset the 5-second timer cleanly on multiple taps.
     var revealJob by remember { mutableStateOf<Job?>(null) }
 
     Card(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
@@ -46,8 +42,8 @@ fun SecureCredentialCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // [T6: Shoulder Surfing] — password is hidden by default
-            // [T11: JVM String Trap] — Minimize string allocation to exact recomputations
+            // [T6] Hide password by default.
+            // [T11] Minimize string allocation to exact recomputations.
             val displayPassword = remember(isRevealed, passwordSecret) {
                 if (isRevealed) String(passwordSecret) else "••••••••••••••••"
             }
@@ -55,13 +51,8 @@ fun SecureCredentialCard(
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
 
-                // SHOW / HIDE button
                 TextButton(onClick = {
                     isRevealed = true
-
-                    // Cancel the previous timer before starting a fresh 5-second countdown.
-                    // This is the fix for the race condition where multiple jobs competed to
-                    // set isRevealed = false — the "SHOW" timer now always resets cleanly.
                     revealJob?.cancel()
                     revealJob = coroutineScope.launch {
                         delay(5000)
@@ -72,22 +63,16 @@ fun SecureCredentialCard(
                     Text(if (isRevealed) "HIDING IN 5s" else "SHOW")
                 }
 
-                // COPY button
                 TextButton(onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
-                    // Generate a stable token for this specific copy event.
-                    // ClipboardWipeWorker will check this token before wiping — so it only wipes
-                    // if the clipboard still holds *this* password, not something the user
-                    // copied manually afterward (see ClipboardWipeWorker for the token check).
+                    // Generate a stable token so ClipboardWipeWorker only wipes this specific copy event.
                     val clipToken = UUID.randomUUID().toString()
 
                     val clipboardText = String(passwordSecret)
-                    // Note: Cannot wipe a String's backing char[] in standard JVM; this minimal-lifetime local is unavoidable.
                     val clip = ClipData.newPlainText("password", clipboardText)
                     
-                    // [T16: Keyboard Clipboard History] — Tell Android 13+ keyboards NOT to
-                    // show this entry in their visual clipboard history tab
+                    // [T16] Tell Android 13+ keyboards NOT to show this in visual clipboard history.
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         clip.description.extras = PersistableBundle().apply {
                             putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
@@ -95,9 +80,7 @@ fun SecureCredentialCard(
                     }
                     clipboard.setPrimaryClip(clip)
 
-                    // [T2: Clipboard Wipe] — Schedule a background wipe in 10 seconds.
-                    // WorkManager is the correct tool here: it survives process death and OEM
-                    // battery killers (within the WorkManager execution window).
+                    // [T2] WorkManager schedules a reliable background wipe in 10 seconds.
                     val wipeRequest = OneTimeWorkRequestBuilder<ClipboardWipeWorker>()
                         .setInitialDelay(10, TimeUnit.SECONDS)
                         .setInputData(

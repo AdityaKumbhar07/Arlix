@@ -11,18 +11,13 @@ import java.nio.ByteBuffer
 class ShadowCryptoProvider : ICryptoProvider {
 
     override suspend fun deriveMasterKey(password: CharArray, salt: ByteArray): ByteArray {
-        // NOTE: T20 (passphrase strength) is checked at *creation time* only (in VaultViewModel.createVault).
-        // We deliberately do NOT re-check it on every unlock — that would be wrong for a correct
-        // passphrase that happens to be exactly at the boundary.
+        // [T20] Passphrase strength checked at creation only, not on every unlock.
 
-        // Run heavy Argon2id math on a background CPU-thread so the UI never freezes (ANR prevention)
+        // Run Argon2id on background CPU-thread to prevent UI freeze (ANR).
         return withContext(Dispatchers.Default) {
             val result = ByteArray(32) // 256-bit key output
 
-            // [T8]: Argon2id — Memory-hard KDF. Each guess costs 64 MB of RAM + 3 sequential passes.
-            // This is kept at 64 MB for initial QA testing; will be bumped based on actual QA
-            // device benchmarks (e.g. up to 256MB) to ensure it stays within the ANR threshold
-            // on reference low-end devices like the Vivo T3x.
+            // [T8] Argon2id — Memory-hard KDF configured for QA memory limits.
             val parameters = Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
                 .withVersion(Argon2Parameters.ARGON2_VERSION_13)
                 .withIterations(3)
@@ -35,14 +30,11 @@ class ShadowCryptoProvider : ICryptoProvider {
             generator.init(parameters)
 
             // Convert CharArray → UTF-8 ByteArray WITHOUT allocating a String on the JVM heap.
-            // String(chars) would pin a plaintext password in the heap indefinitely — T11 violation.
-            // NIO path: CharBuffer.wrap() references the original array in-place (no copy),
-            // encode() writes UTF-8 bytes into a new ByteBuffer, which we drain into a local array.
+            // [T11] String(chars) would pin plaintext in heap indefinitely. See charArrayToUtf8Bytes doc.
             val passwordBytes = charArrayToUtf8Bytes(password)
             try {
                 generator.generateBytes(passwordBytes, result, 0, result.size)
             } finally {
-                // Wipe the temporary byte representation regardless of success or exception
                 wipe(passwordBytes)
             }
 
@@ -108,7 +100,7 @@ fun charArrayToUtf8Bytes(chars: CharArray): ByteArray {
 
 /**
  * Constant-time comparison for sensitive character arrays (e.g., passwords).
- * Mitigates timing side-channel attacks (T9).
+ * [T9] Mitigates timing side-channel attacks.
  */
 fun constantTimeEquals(a: CharArray, b: CharArray): Boolean {
     if (a.size != b.size) return false

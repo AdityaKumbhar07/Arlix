@@ -28,17 +28,10 @@ object MemorySanitizer {
     /**
      * Wipes a CharArray without ever allocating a String on the JVM heap.
      *
-     * WHY NO String():
-     * String(array) would allocate an immutable copy on the heap that we can never zero —
-     * the exact "JVM String Trap" (T11) this whole module is designed to prevent.
-     *
-     * NIO PATH (zero String allocation):
-     * 1. charArrayToUtf8Bytes(array) wraps the CharBuffer in-place, encodes to UTF-8 bytes.
-     * 2. We wipe the resulting byte representation natively.
-     * 3. We zero the original CharArray with fill('\u0000').
+     * [T11] See ShadowCryptoProvider.kt for the NIO zero-allocation rationale.
      */
     fun wipeNative(array: CharArray) {
-        val bytes = charArrayToUtf8Bytes(array)   // NIO — no String object on heap
+        val bytes = charArrayToUtf8Bytes(array)
         try {
             wipeNative(bytes)
         } catch (e: UnsatisfiedLinkError) {

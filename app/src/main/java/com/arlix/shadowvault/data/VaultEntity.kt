@@ -19,7 +19,7 @@ import java.nio.CharBuffer
  * MEMORY NOTE:
  * Room maps this BLOB column to a ByteArray. We never create a String from it. The ByteArray
  * is converted back to a CharArray via NIO (ByteBuffer → CharBuffer) without touching
- * the JVM String pool. This closes the T11 (JVM String Trap) gap in the data layer.
+ * the JVM String pool. [T11] closed in data layer.
  */
 @Entity(tableName = "credentials")
 data class VaultEntity(
