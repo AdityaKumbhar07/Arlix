@@ -4,11 +4,11 @@
 #include <android/log.h>
 #include <errno.h>
 
-#define LOG_TAG "ShadowVault_Sanitizer"
+#define LOG_TAG "Arlix_Sanitizer"
 
 extern "C"
 JNIEXPORT void JNICALL
-Java_com_arlix_svault_crypto_MemorySanitizer_wipeNative(JNIEnv *env, jobject thiz, jbyteArray array) {
+Java_com_arlix_shadowvault_crypto_MemorySanitizer_wipeNative(JNIEnv *env, jobject thiz, jbyteArray array) {
     if (array == nullptr) return;
 
     jsize len = env->GetArrayLength(array);

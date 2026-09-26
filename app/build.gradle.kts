@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.arlix.svault"
+    namespace = "com.arlix.shadowvault"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.arlix.svault"
+        applicationId = "com.arlix.shadowvault"
         minSdk = 28
         targetSdk = 37
         versionCode = 1
@@ -27,6 +27,9 @@ android {
         release {
             isMinifyEnabled = false
         }
+    }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
