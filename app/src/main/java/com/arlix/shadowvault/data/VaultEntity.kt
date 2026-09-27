@@ -13,8 +13,7 @@ import java.nio.CharBuffer
  * The field is named `passwordBytes` (not `passwordEncrypted`) because at this phase,
  * the password is stored as raw UTF-8 bytes in a BLOB column. SQLCipher transparently
  * AES-256 encrypts every page of the database file — so the bytes are protected at the
- * storage level, but there is no second field-level AES-GCM pass on this column yet.
- * Field-level encryption is a planned Phase 4 milestone (see ICryptoProvider.encryptData).
+ * storage level.
  *
  * MEMORY NOTE:
  * Room maps this BLOB column to a ByteArray. We never create a String from it. The ByteArray

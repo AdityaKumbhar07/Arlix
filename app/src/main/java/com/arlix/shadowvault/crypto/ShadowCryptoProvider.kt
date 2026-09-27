@@ -42,29 +42,6 @@ class ShadowCryptoProvider : ICryptoProvider {
         }
     }
 
-    /**
-     * Placeholder — field-level AES-256-GCM encryption is a planned Phase 4 milestone.
-     * SQLCipher's page-level encryption (AES-256) is the active protection layer right now.
-     * This method MUST NOT be called until implemented; it has been removed from all call sites.
-     */
-    override fun encryptData(plaintext: ByteArray, key: ByteArray): ByteArray {
-        throw NotImplementedError(
-            "Phase 4 TODO: encryptData not yet implemented. " +
-            "SQLCipher page-level encryption is the active defense. " +
-            "Do not call this method until Phase 4 is complete."
-        )
-    }
-
-    /**
-     * Placeholder — see encryptData.
-     */
-    override fun decryptData(ciphertext: ByteArray, key: ByteArray): ByteArray {
-        throw NotImplementedError(
-            "Phase 4 TODO: decryptData not yet implemented. " +
-            "Do not call this method until Phase 4 is complete."
-        )
-    }
-
     override fun wipe(buffer: ByteArray) {
         try {
             MemorySanitizer.wipeNative(buffer)

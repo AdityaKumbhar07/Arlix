@@ -17,18 +17,6 @@ interface ICryptoProvider {
     suspend fun deriveMasterKey(password: CharArray, salt: ByteArray): ByteArray
 
     /**
-     * Encrypts the raw database bytes before they hit the disk.
-     */
-    fun encryptData(plaintext: ByteArray, key: ByteArray): ByteArray
-
-    /**
-     * Decrypts the raw database bytes back into memory.
-     * @throws DecryptionFailedException if the password was wrong or data was tampered with.
-     */
-    @Throws(DecryptionFailedException::class)
-    fun decryptData(ciphertext: ByteArray, key: ByteArray): ByteArray
-
-    /**
      * Zeroizes a byte array in memory (overwrites it with zeros).
      */
     fun wipe(buffer: ByteArray)
