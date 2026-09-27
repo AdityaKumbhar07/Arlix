@@ -61,7 +61,7 @@ fun LockScreen(
     onUnlock: (CharArray) -> Unit,
     onCreateVault: (password: CharArray, confirm: CharArray) -> Unit
 ) {
-    val isSetupMode = uiState is VaultUiState.Setup
+    val isSetupMode = uiState is VaultUiState.Setup || (uiState is VaultUiState.Error && uiState.isSetupMode)
 
     // Compose-side Strings for rendering only. Converted to CharArray before being sent down.
     var passwordInput by remember { mutableStateOf("") }

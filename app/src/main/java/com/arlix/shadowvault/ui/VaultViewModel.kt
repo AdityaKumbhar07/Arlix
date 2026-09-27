@@ -43,7 +43,7 @@ sealed class VaultUiState {
      * NOTE: We do NOT automatically transition out of this state — the user must retry.
      * This ensures the error message stays visible long enough to be read (Bug 2 fix).
      */
-    data class Error(val message: String) : VaultUiState()
+    data class Error(val message: String, val isSetupMode: Boolean = false) : VaultUiState()
 }
 
 // ---------------------------------------------------------------------------
@@ -75,6 +75,7 @@ class VaultViewModel(
 
     private var currentEntries: List<VaultEntry> = emptyList()
     private var dbJob: Job? = null
+    private var unlockJob: Job? = null
 
     /**
      * Guard against re-entrant cold vault operations.
@@ -88,6 +89,8 @@ class VaultViewModel(
         }
         viewModelScope.launch {
             lockVaultUseCase.lockEvents.collect {
+                unlockJob?.cancel()
+                unlockJob = null
                 dbJob?.cancel()
                 dbJob = null
                 wipeEntries(currentEntries)
@@ -107,7 +110,7 @@ class VaultViewModel(
         if (password.size < 5) {
             val msg = "Passphrase must be at least 5 characters."
             if (isColdVault) _coldVaultError.value = msg           // Bug 1a fix: stay on Dashboard
-            else _uiState.value = VaultUiState.Error(msg)
+            else _uiState.value = VaultUiState.Error(msg, isSetupMode = true)
             password.fill('\u0000')
             confirmPassword.fill('\u0000')
             return
@@ -115,7 +118,7 @@ class VaultViewModel(
         if (!constantTimeEquals(password, confirmPassword)) {
             val msg = "Passphrases do not match. Please try again."
             if (isColdVault) _coldVaultError.value = msg           // Bug 1a fix: stay on Dashboard
-            else _uiState.value = VaultUiState.Error(msg)
+            else _uiState.value = VaultUiState.Error(msg, isSetupMode = true)
             password.fill('\u0000')
             confirmPassword.fill('\u0000')
             return
@@ -150,7 +153,7 @@ class VaultViewModel(
     private fun unlockHotVaultInternal(password: CharArray) {
         _uiState.value = VaultUiState.Unlocking
 
-        viewModelScope.launch {
+        unlockJob = viewModelScope.launch {
             try {
                 unlockVaultUseCase(password, saltProvider(false), isColdVault = false)
                 // password is zeroed inside UnlockVaultUseCase's finally block
@@ -161,19 +164,22 @@ class VaultViewModel(
                         vaultRepository.getAllEntries().collect { entries ->
                             wipeEntries(currentEntries)
                             currentEntries = entries
-                            if (_uiState.value !is VaultUiState.AddingCredential) {
+                            if (_uiState.value !is VaultUiState.AddingCredential && _uiState.value !is VaultUiState.Locked) {
                                 _uiState.value = VaultUiState.Unlocked(entries, isColdVault = false)
                             }
                         }
                     } catch (e: Exception) {
                         if (e is kotlinx.coroutines.CancellationException) throw e
-                        _uiState.value = VaultUiState.Error("Vault read error. Please re-unlock.")
+                        if (_uiState.value !is VaultUiState.Locked) {
+                            _uiState.value = VaultUiState.Error("Vault read error. Please re-unlock.")
+                        }
                     }
                 }
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                // DB is already closed; show error without calling lock() to prevent UI race.
-                _uiState.value = VaultUiState.Error("Incorrect Password or Corrupted Vault.")
+                if (_uiState.value !is VaultUiState.Locked) {
+                    _uiState.value = VaultUiState.Error("Incorrect Password or Corrupted Vault.")
+                }
             }
         }
     }
@@ -192,7 +198,7 @@ class VaultViewModel(
         coldVaultInProgress = true
         _coldVaultError.value = null // clear any previous error
 
-        viewModelScope.launch {
+        unlockJob = viewModelScope.launch {
             try {
                 // This closes the hot vault and opens the cold vault (Dispatchers.IO inside UseCase)
                 unlockVaultUseCase(password, saltProvider(true), isColdVault = true)

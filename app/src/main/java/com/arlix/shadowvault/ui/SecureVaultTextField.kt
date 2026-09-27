@@ -19,8 +19,11 @@ fun SecureVaultTextField(
 ) {
     OutlinedTextField(
         value = value,
-        onValueChange = onValueChange,
+        onValueChange = { new ->
+            if (new.length <= 256) onValueChange(new)
+        },
         label = { Text(label) },
+        singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
         modifier = modifier
             // [T3] Hides node from Accessibility tree to block screen scrapers.

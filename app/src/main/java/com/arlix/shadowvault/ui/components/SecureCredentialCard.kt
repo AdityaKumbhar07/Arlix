@@ -70,7 +70,7 @@ fun SecureCredentialCard(
                     val clipToken = UUID.randomUUID().toString()
 
                     val clipboardText = String(passwordSecret)
-                    val clip = ClipData.newPlainText("password", clipboardText)
+                    val clip = ClipData.newPlainText(clipToken, clipboardText)
                     
                     // [T16] Tell Android 13+ keyboards NOT to show this in visual clipboard history.
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

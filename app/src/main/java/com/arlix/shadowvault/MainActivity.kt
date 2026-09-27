@@ -1,6 +1,8 @@
 package com.arlix.shadowvault
 
 import android.os.Bundle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -37,6 +39,13 @@ class MainActivity : ComponentActivity() {
             app.vaultRepository,
             saltProvider = { isCold -> com.arlix.shadowvault.crypto.SaltGenerator.getSalt(applicationContext, isCold) }
         )
+    }
+
+        override fun onStop() {
+        super.onStop()
+        (application as ArlixApplication).lockUseCase.let { lockUseCase ->
+            lifecycleScope.launch { lockUseCase() }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -95,7 +104,9 @@ class MainActivity : ComponentActivity() {
                                     onUnlock = { password ->
                                         viewModel.unlock(password, isColdVault = false)
                                     },
-                                    onCreateVault = { _, _ -> /* Not applicable in Locked state */ }
+                                    onCreateVault = { password, confirm ->
+                                        viewModel.createVault(password, confirm, isColdVault = false)
+                                    }
                                 )
                             }
 
