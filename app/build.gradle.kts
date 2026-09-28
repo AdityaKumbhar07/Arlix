@@ -5,6 +5,14 @@ plugins {
 }
 
 android {
+
+    packaging {
+        resources {
+            excludes += "META-INF/*"
+        }
+    }
+
+
     namespace = "com.arlix.shadowvault"
     compileSdk = 37
 
@@ -47,6 +55,7 @@ android {
     }
 }
 
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
@@ -64,10 +73,15 @@ dependencies {
     //implementation(libs.identity)
     testImplementation(libs.junit)
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0") // TestDispatcher for VaultViewModelTest
+    testImplementation("app.cash.turbine:turbine:1.1.0")
+    testImplementation("io.mockk:mockk:1.13.10")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    androidTestImplementation("app.cash.turbine:turbine:1.1.0")
+    androidTestImplementation("io.mockk:mockk-android:1.13.10")
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
         // SQLCipher AES-256 Page Encryption
@@ -79,7 +93,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    // Crypto and Work
-    implementation(libs.androidx.work.runtime.ktx)
+    // Crypto
     implementation(libs.bouncycastle)
 }

@@ -42,6 +42,12 @@ fun DashboardScreen(
         }
     }
 
+    LaunchedEffect(isColdVault) {
+        if (isColdVault) {
+            showColdVaultDialog = false
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(

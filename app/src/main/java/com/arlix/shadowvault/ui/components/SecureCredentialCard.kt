@@ -12,14 +12,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import com.arlix.shadowvault.workers.ClipboardWipeWorker
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import java.util.UUID
-import java.util.concurrent.TimeUnit
 
 @Composable
 fun SecureCredentialCard(
@@ -28,12 +20,7 @@ fun SecureCredentialCard(
     passwordSecret: CharArray
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-
     var isRevealed by remember { mutableStateOf(false) }
-
-    // [T6] Tracks the active reveal job to reset the 5-second timer cleanly on multiple taps.
-    var revealJob by remember { mutableStateOf<Job?>(null) }
 
     Card(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
         Column(modifier = Modifier.padding(16.dp)) {
@@ -52,42 +39,23 @@ fun SecureCredentialCard(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
 
                 TextButton(onClick = {
-                    isRevealed = true
-                    revealJob?.cancel()
-                    revealJob = coroutineScope.launch {
-                        delay(5000)
-                        isRevealed = false
-                        revealJob = null
-                    }
+                    isRevealed = !isRevealed
                 }) {
-                    Text(if (isRevealed) "HIDING IN 5s" else "SHOW")
+                    Text(if (isRevealed) "HIDE" else "SHOW")
                 }
 
                 TextButton(onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-
-                    // Generate a stable token so ClipboardWipeWorker only wipes this specific copy event.
-                    val clipToken = UUID.randomUUID().toString()
-
                     val clipboardText = String(passwordSecret)
-                    val clip = ClipData.newPlainText(clipToken, clipboardText)
-                    
-                    // [T16] Tell Android 13+ keyboards NOT to show this in visual clipboard history.
+                    val clip = ClipData.newPlainText("Password", clipboardText)
+
+                    // [T16] Tell Android 13+ keyboards NOT to show this in visual clipboard history preview.
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                         clip.description.extras = PersistableBundle().apply {
                             putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
                         }
                     }
                     clipboard.setPrimaryClip(clip)
-
-                    // [T2] WorkManager schedules a reliable background wipe in 10 seconds.
-                    val wipeRequest = OneTimeWorkRequestBuilder<ClipboardWipeWorker>()
-                        .setInitialDelay(10, TimeUnit.SECONDS)
-                        .setInputData(
-                            androidx.work.workDataOf(ClipboardWipeWorker.KEY_CLIP_TOKEN to clipToken)
-                        )
-                        .build()
-                    WorkManager.getInstance(context).enqueue(wipeRequest)
                 }) {
                     Text("COPY")
                 }
