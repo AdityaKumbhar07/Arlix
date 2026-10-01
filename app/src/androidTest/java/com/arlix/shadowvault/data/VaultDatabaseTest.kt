@@ -47,6 +47,7 @@ class VaultDatabaseTest {
             username = "test_user",
             notes = "test notes",
             passwordBytes = byteArrayOf(1, 2, 3),
+            category = "General",
             createdAt = 12345L,
             modifiedAt = 12345L
         )

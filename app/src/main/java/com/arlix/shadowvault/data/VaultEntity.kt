@@ -26,6 +26,7 @@ data class VaultEntity(
     val title: String,
     val username: String,
     val notes: String,
+    val category: String,
     // Stored as UTF-8 BLOB. Room maps ByteArray to SQLite BLOB natively — no TypeConverter needed.
     val passwordBytes: ByteArray,
     val createdAt: Long,
@@ -49,6 +50,7 @@ data class VaultEntity(
             username = username,
             notes = notes,
             passwordSecret = passwordChars,
+            category = category,
             createdAt = createdAt,
             modifiedAt = modifiedAt
         )

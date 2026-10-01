@@ -32,7 +32,7 @@ class LockScreenTest {
 
         composeTestRule.onNodeWithText("New Master Passphrase").performTextInput("12345")
         composeTestRule.onNodeWithText("Confirm Passphrase").performTextInput("12345")
-        composeTestRule.onNodeWithText("CREATE VAULT").performClick()
+        composeTestRule.onNodeWithText("Create master key").performClick()
 
         assertTrue(created)
     }
@@ -52,7 +52,7 @@ class LockScreenTest {
         }
 
         composeTestRule.onNodeWithText("Master Passphrase").performTextInput("12345")
-        composeTestRule.onNodeWithText("UNLOCK").performClick()
+        composeTestRule.onNodeWithText("Unlock vault").performClick()
 
         assertTrue(unlocked)
     }

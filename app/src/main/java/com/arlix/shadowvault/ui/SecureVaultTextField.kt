@@ -24,6 +24,7 @@ fun SecureVaultTextField(
         },
         label = { Text(label) },
         singleLine = true,
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(27),
         visualTransformation = PasswordVisualTransformation(),
         modifier = modifier
             // [T3] Hides node from Accessibility tree to block screen scrapers.

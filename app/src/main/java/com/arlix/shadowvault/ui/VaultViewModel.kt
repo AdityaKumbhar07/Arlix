@@ -60,6 +60,18 @@ class VaultViewModel(
     private val _uiState = MutableStateFlow<VaultUiState>(VaultUiState.Locked)
     val uiState: StateFlow<VaultUiState> = _uiState.asStateFlow()
 
+    private val _selectedCategory = MutableStateFlow("All")
+    val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
+
+    fun setCategoryFilter(category: String) {
+        _selectedCategory.value = category
+        val currentState = _uiState.value
+        if (currentState is VaultUiState.Unlocked) {
+            val filtered = if (category == "All") currentEntries else currentEntries.filter { it.category == category }
+            _uiState.value = VaultUiState.Unlocked(filtered, currentState.isColdVault)
+        }
+    }
+
     /** Wipes every password CharArray in a list before the list reference is dropped. */
     private fun wipeEntries(entries: List<VaultEntry>) {
         entries.forEach { it.annihilate() }
@@ -165,7 +177,9 @@ class VaultViewModel(
                             wipeEntries(currentEntries)
                             currentEntries = entries
                             if (_uiState.value !is VaultUiState.AddingCredential && _uiState.value !is VaultUiState.Locked) {
-                                _uiState.value = VaultUiState.Unlocked(entries, isColdVault = false)
+                                val cat = _selectedCategory.value
+                                val filtered = if (cat == "All") entries else entries.filter { it.category == cat }
+                                _uiState.value = VaultUiState.Unlocked(filtered, isColdVault = false)
                             }
                         }
                     } catch (e: Exception) {
@@ -211,7 +225,9 @@ class VaultViewModel(
                             wipeEntries(currentEntries)
                             currentEntries = entries
                             if (_uiState.value !is VaultUiState.AddingCredential) {
-                                _uiState.value = VaultUiState.Unlocked(entries, isColdVault = true)
+                                val cat = _selectedCategory.value
+                                val filtered = if (cat == "All") entries else entries.filter { it.category == cat }
+                                _uiState.value = VaultUiState.Unlocked(filtered, isColdVault = true)
                             }
                         }
                     } catch (e: Exception) {
@@ -263,7 +279,9 @@ class VaultViewModel(
 
     fun cancelAddCredential(isColdVault: Boolean) {
         if (_uiState.value !is VaultUiState.Locked) {
-            _uiState.value = VaultUiState.Unlocked(currentEntries, isColdVault)
+            val cat = _selectedCategory.value
+            val filtered = if (cat == "All") currentEntries else currentEntries.filter { it.category == cat }
+            _uiState.value = VaultUiState.Unlocked(filtered, isColdVault)
         }
     }
 
@@ -275,7 +293,9 @@ class VaultViewModel(
                 vaultRepository.addEntry(entry)
                 entry.annihilate()
                 if (_uiState.value !is VaultUiState.Locked) {
-                    _uiState.value = VaultUiState.Unlocked(currentEntries, isColdVault)
+                    val cat = _selectedCategory.value
+                    val filtered = if (cat == "All") currentEntries else currentEntries.filter { it.category == cat }
+                    _uiState.value = VaultUiState.Unlocked(filtered, isColdVault)
                 }
             } catch (e: Exception) {
                 entry.annihilate()

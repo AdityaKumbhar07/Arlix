@@ -17,7 +17,7 @@ import androidx.lifecycle.lifecycleScope
 import com.arlix.shadowvault.ui.VaultUiState
 import com.arlix.shadowvault.ui.VaultViewModel
 import com.arlix.shadowvault.ui.screens.AddCredentialScreen
-import com.arlix.shadowvault.ui.screens.DashboardScreen
+
 import com.arlix.shadowvault.ui.screens.LockScreen
 import com.arlix.shadowvault.ui.theme.ArlixTheme
 import kotlinx.coroutines.launch
@@ -105,30 +105,36 @@ class MainActivity : ComponentActivity() {
 
                             // --- Vault is open: show credential dashboard ---
                             is VaultUiState.Unlocked -> {
-                                DashboardScreen(
-                                    entries = state.entries,
-                                    isColdVault = state.isColdVault,
-                                    coldVaultExists = viewModel.coldVaultExists(),
-                                    // coldVaultError flows inline into the dialog (Bug 1a fix)
-                                    coldVaultError = coldVaultError,
-                                    onLock = { viewModel.lock() },
-                                    onColdVaultUnlock = { coldPassword ->
-                                        viewModel.unlock(coldPassword, isColdVault = true)
-                                    },
-                                    onColdVaultCreate = { coldPassword, confirm ->
-                                        viewModel.createVault(coldPassword, confirm, isColdVault = true)
-                                    },
-                                    onDismissColdVaultError = { viewModel.clearColdVaultError() },
-                                    onAddClicked = { viewModel.navigateToAddCredential(state.isColdVault) }
-                                )
+                                if (state.isColdVault) {
+                                    com.arlix.shadowvault.ui.screens.ColdVaultScreen(
+                                        entries = state.entries,
+                                        onBack = { viewModel.lock() },
+                                        onAddEntry = { entry -> viewModel.addCredential(entry) }
+                                    )
+                                } else {
+                                    val selectedCategory by viewModel.selectedCategory.collectAsState()
+                                    com.arlix.shadowvault.ui.screens.HotVaultScreen(
+                                        entries = state.entries,
+                                        selectedCategory = selectedCategory,
+                                        onCategorySelected = { viewModel.setCategoryFilter(it) },
+                                        onLock = { viewModel.lock() },
+                                        onOpenColdVault = { coldPassword ->
+                                            viewModel.unlock(coldPassword, isColdVault = true)
+                                        },
+                                        onAddEntry = { entry -> viewModel.addCredential(entry) },
+                                        coldVaultExists = viewModel.coldVaultExists(),
+                                        onColdVaultCreate = { coldPassword, confirm ->
+                                            viewModel.createVault(coldPassword, confirm, isColdVault = true)
+                                        },
+                                        coldVaultError = coldVaultError,
+                                        onDismissColdVaultError = { viewModel.clearColdVaultError() }
+                                    )
+                                }
                             }
 
-                            // --- Add Credential form ---
+                            // --- Add Credential form (no longer used since it's a bottom sheet in VaultScreens) ---
                             is VaultUiState.AddingCredential -> {
-                                AddCredentialScreen(
-                                    onSave = { entry -> viewModel.addCredential(entry) },
-                                    onCancel = { viewModel.cancelAddCredential(state.isColdVault) }
-                                )
+                                // Just a fallback, shouldn't be reached
                             }
                         }
                     }

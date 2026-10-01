@@ -14,6 +14,7 @@ data class VaultEntry(
     val username: String,
     val notes: String,
     val passwordSecret: CharArray,
+    val category: String = "General",
     val createdAt: Long = System.currentTimeMillis(),
     val modifiedAt: Long = System.currentTimeMillis()
 ) {

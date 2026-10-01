@@ -2,10 +2,11 @@ package com.arlix.shadowvault.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val HotVaultCanvas = Color(0xFFFAF9F5)
+val ColdVaultCanvas = Color(0xFFF5F7FA)
+val HotVaultBorder = Color(0xFFE8E6DC)
+val ColdVaultBorder = Color(0xFFCFDBE7)
+val HotVaultAccent = Color(0xFFD97757)
+val ColdVaultAccent = Color(0xFF4B9EB9)
+val TextPrimary = Color(0xFF141413)
+val TextMuted = Color(0xFF636159)

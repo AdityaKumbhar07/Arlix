@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
  *      Uses fallbackToDestructiveMigration() since no production data exists yet.
  *      [T11] closed in data layer.
  */
-@Database(entities = [VaultEntity::class], version = 2, exportSchema = false)
+@Database(entities = [VaultEntity::class], version = 3, exportSchema = false)
 abstract class VaultDatabase : RoomDatabase() {
     abstract fun vaultDao(): VaultDao
 }

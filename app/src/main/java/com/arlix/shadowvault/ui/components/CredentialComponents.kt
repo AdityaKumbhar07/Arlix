@@ -1,0 +1,372 @@
+package com.arlix.shadowvault.ui.components
+
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
+import android.content.Context
+import android.os.Build
+import android.os.PersistableBundle
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.arlix.shadowvault.R
+import com.arlix.shadowvault.ui.theme.ColdVaultAccent
+import com.arlix.shadowvault.ui.theme.ColdVaultBorder
+import com.arlix.shadowvault.ui.theme.ColdVaultCanvas
+import com.arlix.shadowvault.ui.theme.HotVaultAccent
+import com.arlix.shadowvault.ui.theme.HotVaultBorder
+import com.arlix.shadowvault.ui.theme.HotVaultCanvas
+import com.arlix.shadowvault.ui.theme.TextMuted
+import com.arlix.shadowvault.ui.theme.TextPrimary
+
+@Composable
+fun CredentialListItem(
+    title: String,
+    username: String,
+    isColdVault: Boolean,
+    onClick: () -> Unit
+) {
+    val borderColor = if (isColdVault) ColdVaultBorder else HotVaultBorder
+    val initial = title.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(borderColor, RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = initial,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary
+                )
+                Text(
+                    text = username,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextMuted
+                )
+            }
+            
+            Icon(
+                painter = painterResource(R.drawable.ic_chevron_right),
+                contentDescription = null,
+                tint = TextMuted,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun CredentialDetailSheetContent(
+    title: String,
+    username: String,
+    passwordSecret: CharArray,
+    category: String,
+    isColdVault: Boolean,
+    onClose: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val context = LocalContext.current
+    var isRevealed by remember { mutableStateOf(false) }
+
+    val canvasColor = if (isColdVault) ColdVaultCanvas else HotVaultCanvas
+    val borderColor = if (isColdVault) ColdVaultBorder else HotVaultBorder
+    val accentColor = if (isColdVault) ColdVaultAccent else HotVaultAccent
+    val initial = title.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(canvasColor)
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(borderColor, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = initial,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = category,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextMuted
+                        )
+                    }
+                }
+            }
+
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier
+                    .size(40.dp)
+                    .border(1.dp, borderColor, CircleShape)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_close),
+                    contentDescription = "Close",
+                    tint = TextPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Username Card
+        DetailCardBox(title = "USERNAME / ACCOUNT", borderColor = borderColor) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = username,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = TextPrimary
+                )
+                IconButton(
+                    onClick = { copyToClipboard(context, username) },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_copy),
+                        contentDescription = "Copy Username",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Password Card
+        DetailCardBox(title = "PASSWORD / SECRET", borderColor = borderColor) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val displayPassword = remember(isRevealed, passwordSecret) {
+                    if (isRevealed) String(passwordSecret) else "••••••••••••••••"
+                }
+                
+                Text(
+                    text = displayPassword,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        letterSpacing = if (isRevealed) 0.sp else 2.sp
+                    ),
+                    color = TextPrimary,
+                    modifier = Modifier
+                        .semantics { hideFromAccessibility() }
+                        .weight(1f)
+                )
+                
+                Row(horizontalArrangement = Arrangement.End) {
+                    IconButton(
+                        onClick = { isRevealed = !isRevealed },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                    ) {
+                        Icon(
+                            imageVector = if (isRevealed) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                            contentDescription = "Reveal",
+                            tint = TextPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    IconButton(
+                        onClick = { copyToClipboard(context, String(passwordSecret), true) },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(accentColor, RoundedCornerShape(12.dp))
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_copy),
+                            contentDescription = "Copy Password",
+                            tint = canvasColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Notes Card (Dummy)
+        DetailCardBox(title = "NOTES & DETAILS", borderColor = borderColor) {
+            Text(
+                text = "No notes available for this credential.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextMuted
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        // Action Buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            OutlinedButton(
+                onClick = { /* Dummy Edit */ },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_more_vert), // using more_vert as placeholder for edit icon since we lack edit
+                        contentDescription = "Edit",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Edit Credential",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextPrimary
+                    )
+                }
+            }
+            
+            Button(
+                onClick = onDelete,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF0F0)) // Light Red
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_close), // using close as placeholder for trash
+                        contentDescription = "Delete",
+                        tint = Color(0xFFD95757),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Delete",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color(0xFFD95757)
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+fun DetailCardBox(title: String, borderColor: Color, content: @Composable () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextMuted
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            content()
+        }
+    }
+}
+
+private fun copyToClipboard(context: Context, text: String, isSensitive: Boolean = false) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val clip = ClipData.newPlainText("VaultData", text)
+    if (isSensitive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        clip.description.extras = PersistableBundle().apply {
+            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+        }
+    }
+    clipboard.setPrimaryClip(clip)
+}

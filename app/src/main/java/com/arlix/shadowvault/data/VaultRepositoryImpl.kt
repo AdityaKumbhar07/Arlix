@@ -71,7 +71,7 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
         val passwordBytes = charArrayToUtf8Bytes(entry.passwordSecret)
         val entity = VaultEntity(
             id = entry.id, title = entry.title, username = entry.username, notes = entry.notes,
-            passwordBytes = passwordBytes, createdAt = entry.createdAt, modifiedAt = entry.modifiedAt
+            category = entry.category, passwordBytes = passwordBytes, createdAt = entry.createdAt, modifiedAt = entry.modifiedAt
         )
         db.vaultDao().insertCredential(entity)
         passwordBytes.fill(0)
