@@ -2,6 +2,7 @@ package com.arlix.shadowvault.data
 
 import android.content.Context
 import androidx.room.Room
+import com.arlix.shadowvault.BuildConfig
 import com.arlix.shadowvault.crypto.charArrayToUtf8Bytes
 import com.arlix.shadowvault.domain.IVaultRepository
 import com.arlix.shadowvault.domain.VaultEntry
@@ -11,7 +12,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
-import com.arlix.shadowvault.BuildConfig
 
 class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
 

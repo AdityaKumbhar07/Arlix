@@ -1,8 +1,6 @@
 package com.arlix.shadowvault
 
 import android.os.Bundle
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.launch
 import android.view.View
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -15,19 +13,14 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.ProcessLifecycleOwner
-import com.arlix.shadowvault.crypto.ShadowCryptoProvider
-import com.arlix.shadowvault.data.VaultRepositoryImpl
-import com.arlix.shadowvault.domain.usecase.LockVaultUseCase
-import com.arlix.shadowvault.domain.usecase.UnlockVaultUseCase
+import androidx.lifecycle.lifecycleScope
 import com.arlix.shadowvault.ui.VaultUiState
 import com.arlix.shadowvault.ui.VaultViewModel
 import com.arlix.shadowvault.ui.screens.AddCredentialScreen
 import com.arlix.shadowvault.ui.screens.DashboardScreen
 import com.arlix.shadowvault.ui.screens.LockScreen
 import com.arlix.shadowvault.ui.theme.ArlixTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 

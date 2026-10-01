@@ -1,12 +1,12 @@
 package com.arlix.shadowvault.crypto
 
 import com.arlix.shadowvault.domain.ICryptoProvider
-import org.bouncycastle.crypto.generators.Argon2BytesGenerator
-import org.bouncycastle.crypto.params.Argon2Parameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.nio.CharBuffer
+import org.bouncycastle.crypto.generators.Argon2BytesGenerator
+import org.bouncycastle.crypto.params.Argon2Parameters
 import java.nio.ByteBuffer
+import java.nio.CharBuffer
 
 class ShadowCryptoProvider : ICryptoProvider {
 

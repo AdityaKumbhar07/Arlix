@@ -1,4 +1,4 @@
-package com.arlix.shadowvault.ui.components
+    package com.arlix.shadowvault.ui.components
 
 import android.content.ClipData
 import android.content.ClipDescription
@@ -11,6 +11,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -34,7 +36,12 @@ fun SecureCredentialCard(
             val displayPassword = remember(isRevealed, passwordSecret) {
                 if (isRevealed) String(passwordSecret) else "••••••••••••••••"
             }
-            Text(text = displayPassword, style = MaterialTheme.typography.bodyLarge)
+            // [T3] Hides password from accessibility scrapers when revealed.
+            Text(
+                text = displayPassword,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.semantics { hideFromAccessibility() }
+            )
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
 

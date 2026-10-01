@@ -7,16 +7,16 @@ import android.content.IntentFilter
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.arlix.shadowvault.crypto.ShadowCryptoProvider
 import com.arlix.shadowvault.data.VaultRepositoryImpl
 import com.arlix.shadowvault.domain.IVaultRepository
 import com.arlix.shadowvault.domain.usecase.LockVaultUseCase
 import com.arlix.shadowvault.domain.usecase.UnlockVaultUseCase
-import com.arlix.shadowvault.crypto.ShadowCryptoProvider
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 class ArlixApplication : Application(), DefaultLifecycleObserver {
 
@@ -53,7 +53,7 @@ class ArlixApplication : Application(), DefaultLifecycleObserver {
         lockUseCase = LockVaultUseCase(vaultRepository)
         unlockUseCase = UnlockVaultUseCase(cryptoProvider, vaultRepository)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
-        
+
         // Register receiver for ACTION_SCREEN_OFF at runtime (cannot be in manifest)
         registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
     }
