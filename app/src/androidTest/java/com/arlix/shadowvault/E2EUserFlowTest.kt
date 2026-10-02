@@ -49,9 +49,9 @@ class E2EUserFlowTest {
     fun testHappyPathSetupAddCredentialAndLockUnlock() {
         ActivityScenario.launch(MainActivity::class.java).use {
             // 1. Initial Setup Screen
-            composeTestRule.onNodeWithText("Create Master Key").assertIsDisplayed()
-            composeTestRule.onNodeWithText("New Master Passphrase").performTextInput("masterpass123")
-            composeTestRule.onNodeWithText("Confirm Passphrase").performTextInput("masterpass123")
+            composeTestRule.onNodeWithText("Create master key").assertIsDisplayed()
+            composeTestRule.onAllNodes(hasSetTextAction())[0].performTextInput("masterpass123")
+            composeTestRule.onAllNodes(hasSetTextAction())[1].performTextInput("masterpass123")
             composeTestRule.onNodeWithText("Create master key").performClick()
 
             // 2. Wait for Argon2id derivation & SQLCipher DB init -> Dashboard
@@ -66,11 +66,11 @@ class E2EUserFlowTest {
                 composeTestRule.onAllNodesWithText("Save Credential").fetchSemanticsNodes().isNotEmpty()
             }
 
-            composeTestRule.onNodeWithText("Title").performTextInput("ProtonMail")
-            composeTestRule.onNodeWithText("Username").performTextInput("alice@proton.me")
-            composeTestRule.onNodeWithText("Password").performTextInput("secret12345")
-            composeTestRule.onNodeWithText("Notes (Optional)").performTextInput("Recovery key stored offline")
-            composeTestRule.onNodeWithText("Save Credential").performClick()
+            composeTestRule.onAllNodes(hasSetTextAction())[0].performTextInput("ProtonMail")
+            composeTestRule.onAllNodes(hasSetTextAction())[1].performTextInput("alice@proton.me")
+            composeTestRule.onAllNodes(hasSetTextAction())[2].performTextInput("secret12345")
+            composeTestRule.onAllNodes(hasSetTextAction())[3].performTextInput("Recovery key stored offline")
+            composeTestRule.onNodeWithText("Save Credential").performScrollTo().performClick()
 
             // 4. Verify Credential in Dashboard
             composeTestRule.waitUntil(5_000) {
@@ -87,7 +87,7 @@ class E2EUserFlowTest {
             composeTestRule.onNodeWithText("Enter your Master Passphrase").assertIsDisplayed()
 
             // 6. Unlock Vault
-            composeTestRule.onNodeWithText("Master Passphrase").performTextInput("masterpass123")
+            composeTestRule.onAllNodes(hasSetTextAction())[0].performTextInput("masterpass123")
             composeTestRule.onNodeWithText("Unlock vault").performClick()
 
             // 7. Verify Credential Still Present After Re-authentication
@@ -105,16 +105,16 @@ class E2EUserFlowTest {
     @Test
     fun testPasswordMismatchRoutingBugRegression() {
         ActivityScenario.launch(MainActivity::class.java).use {
-            composeTestRule.onNodeWithText("Create Master Key").assertIsDisplayed()
-            composeTestRule.onNodeWithText("New Master Passphrase").performTextInput("password123")
-            composeTestRule.onNodeWithText("Confirm Passphrase").performTextInput("mismatch456")
+            composeTestRule.onNodeWithText("Create master key").assertIsDisplayed()
+            composeTestRule.onAllNodes(hasSetTextAction())[0].performTextInput("password123")
+            composeTestRule.onAllNodes(hasSetTextAction())[1].performTextInput("mismatch456")
             composeTestRule.onNodeWithText("Create master key").performClick()
 
             // Assert error message
             composeTestRule.onNodeWithText("Passphrases do not match. Please try again.").assertIsDisplayed()
 
             // Assert it remains on Setup screen, NOT routed to Unlock screen
-            composeTestRule.onNodeWithText("Confirm Passphrase").assertIsDisplayed()
+            composeTestRule.onAllNodes(hasSetTextAction())[1].assertIsDisplayed()
             composeTestRule.onNodeWithText("Create master key").assertIsDisplayed()
             composeTestRule.onAllNodesWithText("Unlock vault").assertCountEquals(0)
         }
@@ -152,8 +152,8 @@ class E2EUserFlowTest {
     fun testBackgroundLockRaceCondition() {
         // Setup vault first
         ActivityScenario.launch(MainActivity::class.java).use {
-            composeTestRule.onNodeWithText("New Master Passphrase").performTextInput("masterpass123")
-            composeTestRule.onNodeWithText("Confirm Passphrase").performTextInput("masterpass123")
+            composeTestRule.onAllNodes(hasSetTextAction())[0].performTextInput("masterpass123")
+            composeTestRule.onAllNodes(hasSetTextAction())[1].performTextInput("masterpass123")
             composeTestRule.onNodeWithText("Create master key").performClick()
 
             composeTestRule.waitUntil(15_000) {
@@ -167,7 +167,7 @@ class E2EUserFlowTest {
 
         // Re-launch into Locked state and test backgrounding race
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            composeTestRule.onNodeWithText("Master Passphrase").performTextInput("masterpass123")
+            composeTestRule.onAllNodes(hasSetTextAction())[0].performTextInput("masterpass123")
             composeTestRule.onNodeWithText("Unlock vault").performClick()
 
             // Immediately simulate user pushing app to background while Argon2id is running
@@ -192,8 +192,8 @@ class E2EUserFlowTest {
     fun testColdVaultSetupAndDataIsolation() {
         ActivityScenario.launch(MainActivity::class.java).use {
             // Setup Hot Vault
-            composeTestRule.onNodeWithText("New Master Passphrase").performTextInput("masterpass123")
-            composeTestRule.onNodeWithText("Confirm Passphrase").performTextInput("masterpass123")
+            composeTestRule.onAllNodes(hasSetTextAction())[0].performTextInput("masterpass123")
+            composeTestRule.onAllNodes(hasSetTextAction())[1].performTextInput("masterpass123")
             composeTestRule.onNodeWithText("Create master key").performClick()
 
             composeTestRule.waitUntil(15_000) {
@@ -205,10 +205,10 @@ class E2EUserFlowTest {
             composeTestRule.waitUntil(5_000) {
                 composeTestRule.onAllNodesWithText("Save Credential").fetchSemanticsNodes().isNotEmpty()
             }
-            composeTestRule.onNodeWithText("Title").performTextInput("Top Secret Bank")
-            composeTestRule.onNodeWithText("Username").performTextInput("agent007")
-            composeTestRule.onNodeWithText("Password").performTextInput("classified")
-            composeTestRule.onNodeWithText("Save Credential").performClick()
+            composeTestRule.onAllNodes(hasSetTextAction())[0].performTextInput("Top Secret Bank")
+            composeTestRule.onAllNodes(hasSetTextAction())[1].performTextInput("agent007")
+            composeTestRule.onAllNodes(hasSetTextAction())[2].performTextInput("classified")
+            composeTestRule.onNodeWithText("Save Credential").performScrollTo().performClick()
 
             composeTestRule.waitUntil(5_000) {
                 composeTestRule.onAllNodesWithText("Top Secret Bank").fetchSemanticsNodes().isNotEmpty()
@@ -218,17 +218,19 @@ class E2EUserFlowTest {
             composeTestRule.onNodeWithContentDescription("Settings").performClick()
 
             composeTestRule.waitUntil(5_000) {
-                composeTestRule.onAllNodesWithText("Chamber Isolation").fetchSemanticsNodes().isNotEmpty()
-            }
-            composeTestRule.onNodeWithText("Chamber Isolation").performClick()
-
-            composeTestRule.waitUntil(5_000) {
                 composeTestRule.onAllNodesWithText("Setup Cold Chamber").fetchSemanticsNodes().isNotEmpty()
+            }
+            // Click the card that opens the Cold Vault Modal
+            composeTestRule.onNodeWithText("Setup Cold Chamber").performClick()
+
+            // Wait for the modal to open and the text fields to become available
+            composeTestRule.waitUntil(5_000) {
+                composeTestRule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty()
             }
 
             // Setup Cold Vault with distinct passphrase
-            composeTestRule.onNodeWithText("New Cold Vault Key").performTextInput("coldpass999")
-            composeTestRule.onNodeWithText("Confirm Key").performTextInput("coldpass999")
+            composeTestRule.onAllNodes(hasSetTextAction())[0].performTextInput("coldpass999")
+            composeTestRule.onAllNodes(hasSetTextAction())[1].performTextInput("coldpass999")
             composeTestRule.onNodeWithText("Setup key").performClick()
 
             // Wait for Cold Vault transition: Hot vault credentials ("Top Secret Bank") disappear

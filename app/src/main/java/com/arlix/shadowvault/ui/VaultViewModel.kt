@@ -138,8 +138,8 @@ class VaultViewModel(
         confirmPassword.fill('\u0000')
 
         // Route to the correct unlock path based on vault type
-        if (isColdVault) unlockColdVaultInternal(password)
-        else unlockHotVaultInternal(password)
+       if (isColdVault) unlockColdVaultInternal(password)
+       else unlockHotVaultInternal(password)
     }
 
     // ---------------------------------------------------------------------------

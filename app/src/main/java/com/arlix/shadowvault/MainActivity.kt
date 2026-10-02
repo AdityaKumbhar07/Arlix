@@ -2,7 +2,6 @@ package com.arlix.shadowvault
 
 import android.os.Bundle
 import android.view.View
-import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -16,8 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.arlix.shadowvault.ui.VaultUiState
 import com.arlix.shadowvault.ui.VaultViewModel
-import com.arlix.shadowvault.ui.screens.AddCredentialScreen
-
 import com.arlix.shadowvault.ui.screens.LockScreen
 import com.arlix.shadowvault.ui.theme.ArlixTheme
 import kotlinx.coroutines.launch
@@ -47,18 +44,16 @@ class MainActivity : ComponentActivity() {
         // --- OS ARMOR ---
 
         // [T1] Block screenshots and recent-app carousel snapshots at the OS level.
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
+//        window.setFlags(
+//            WindowManager.LayoutParams.FLAG_SECURE,
+//            WindowManager.LayoutParams.FLAG_SECURE
+//        )
 
         // [T17] Block Trojan Autofill malware from reading field values via AutofillService
         window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
 
         // [T4] Drop touch events when an invisible overlay is detected on top of the app.
         window.decorView.rootView.filterTouchesWhenObscured = true
-
-
 
         setContent {
             ArlixTheme {

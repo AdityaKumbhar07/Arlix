@@ -55,7 +55,7 @@ fun AddCredentialScreen(
             SecureVaultTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = "Password",
+                placeholder = "Password",
                 modifier = Modifier.fillMaxWidth()
             )
             OutlinedTextField(

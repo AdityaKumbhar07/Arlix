@@ -7,16 +7,13 @@ import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arlix.shadowvault.R
@@ -133,14 +130,14 @@ fun SetupScreen(
             SecureVaultTextField(
                 value = passwordInput,
                 onValueChange = { passwordInput = it },
-                label = "New Master Passphrase",
+                placeholder = "New Master Passphrase",
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(12.dp))
             SecureVaultTextField(
                 value = confirmInput,
                 onValueChange = { confirmInput = it },
-                label = "Confirm Passphrase",
+                placeholder = "Confirm Passphrase",
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -237,7 +234,7 @@ fun UnlockScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_lock),
+                    painter = painterResource(R.drawable.ic_shield),
                     contentDescription = "Lock",
                     modifier = Modifier.size(32.dp),
                     tint = TextPrimary
@@ -272,7 +269,7 @@ fun UnlockScreen(
             SecureVaultTextField(
                 value = passwordInput,
                 onValueChange = { passwordInput = it },
-                label = "Master Passphrase",
+                placeholder = "Master Passphrase",
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(24.dp))
