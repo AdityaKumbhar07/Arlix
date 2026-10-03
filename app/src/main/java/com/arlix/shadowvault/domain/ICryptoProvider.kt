@@ -7,7 +7,7 @@ package com.arlix.shadowvault.domain
 interface ICryptoProvider {
 
     /**
-     * Derives a massive, mathematically unbreakable Master Key from the user's password.
+     * Derives a 256-bit master key from the user's password using Argon2id.
      * Uses ByteArray to prevent JVM String traps.
      *
      * @param password The raw Master Passphrase buffer.
@@ -20,10 +20,4 @@ interface ICryptoProvider {
      * Zeroizes a byte array in memory (overwrites it with zeros).
      */
     fun wipe(buffer: ByteArray)
-}
-
-/**
- * Custom Domain Exception for when a hacker tampers with the database file,
- * or the user types the wrong password.
- */
-class DecryptionFailedException(message: String) : Exception(message)
+} 

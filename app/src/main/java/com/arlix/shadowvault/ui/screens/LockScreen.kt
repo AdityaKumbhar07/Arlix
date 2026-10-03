@@ -2,43 +2,54 @@ package com.arlix.shadowvault.ui.screens
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.arlix.shadowvault.R
-import com.arlix.shadowvault.ui.SecureVaultTextField
+import com.arlix.shadowvault.ui.SecurePassphraseField
 import com.arlix.shadowvault.ui.VaultUiState
 import com.arlix.shadowvault.ui.theme.*
+import com.arlix.shadowvault.ui.toSecretChars
+
+/** True if the default keyboard is not a system app. Unknown counts as "warn". */
+private fun isThirdPartyImeActive(context: Context): Boolean = runCatching {
+    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    val currentId = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+        ?: return@runCatching true
+    val ime = imm.enabledInputMethodList.firstOrNull { it.id == currentId }
+        ?: return@runCatching true
+    // Read the flag straight from the keyboard's own service info (no package lookup needed).
+    (ime.serviceInfo.applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM) == 0
+}.getOrDefault(true)
 
 @Composable
 fun rememberIsThirdPartyImeActive(): Boolean {
     val context = LocalContext.current
-    return remember {
-        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        val currentImeId = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
-        val currentIme = imm.enabledInputMethodList.find { it.id == currentImeId }
-        val packageName = currentIme?.packageName
-        val isSystemApp = packageName?.let {
-            try {
-                val appInfo = context.packageManager.getApplicationInfo(it, 0)
-                (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-            } catch (e: PackageManager.NameNotFoundException) {
-                false
-            }
-        } ?: false
-        !isSystemApp
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var active by remember { mutableStateOf(isThirdPartyImeActive(context)) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) active = isThirdPartyImeActive(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
+    return active
 }
 
 @Composable
@@ -48,12 +59,7 @@ fun LockScreen(
     onCreateVault: (password: CharArray, confirm: CharArray) -> Unit
 ) {
     val isSetupMode = uiState is VaultUiState.Setup || (uiState is VaultUiState.Error && uiState.isSetupMode)
-
-    if (isSetupMode) {
-        SetupScreen(uiState, onCreateVault)
-    } else {
-        UnlockScreen(uiState, onUnlock)
-    }
+    if (isSetupMode) SetupScreen(uiState, onCreateVault) else UnlockScreen(uiState, onUnlock)
 }
 
 @Composable
@@ -61,139 +67,27 @@ fun SetupScreen(
     uiState: VaultUiState,
     onCreateVault: (password: CharArray, confirm: CharArray) -> Unit
 ) {
-    var passwordInput by remember { mutableStateOf("") }
-    var confirmInput by remember { mutableStateOf("") }
-    val isThirdPartyIme = rememberIsThirdPartyImeActive()
+    // remember, NOT rememberSaveable / rememberTextFieldState: the text must never be saved.
+    val passwordState = remember { TextFieldState() }
+    val confirmState = remember { TextFieldState() }
 
-    Box(modifier = Modifier.fillMaxSize().background(HotVaultCanvas)) {
-        // Status badge
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(16.dp)
-                .background(HotVaultBorder, CircleShape)
-                .padding(horizontal = 12.dp, vertical = 4.dp)
-        ) {
-            Text(
-                text = "FIRST-TIME SETUP",
-                style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
-                color = TextMuted
-            )
+    LockScreenLayout(
+        badge = "FIRST-TIME SETUP",
+        iconDescription = "Shield",
+        title = "Create Master Key",
+        subtitle = "Minimum 5 characters. This passphrase cannot be recovered if forgotten.",
+        uiState = uiState,
+        buttonText = "Create master key",
+        buttonEnabled = passwordState.text.isNotEmpty() && confirmState.text.isNotEmpty(),
+        onButtonClick = {
+            onCreateVault(passwordState.toSecretChars(), confirmState.toSecretChars())
+            passwordState.clearText()
+            confirmState.clearText()
         }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(HotVaultBorder, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_shield),
-                    contentDescription = "Shield",
-                    modifier = Modifier.size(32.dp),
-                    tint = TextPrimary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "Create Master Key",
-                style = MaterialTheme.typography.titleLarge,
-                color = TextPrimary
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Minimum 5 characters. This passphrase cannot be recovered if forgotten.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextMuted
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-
-            if (isThirdPartyIme) {
-                Text(
-                    text = "⚠ A third-party keyboard is active. It may log keystrokes.",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            SecureVaultTextField(
-                value = passwordInput,
-                onValueChange = { passwordInput = it },
-                placeholder = "New Master Passphrase",
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            SecureVaultTextField(
-                value = confirmInput,
-                onValueChange = { confirmInput = it },
-                placeholder = "Confirm Passphrase",
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-
-            if (uiState is VaultUiState.Error) {
-                Text(
-                    text = uiState.message,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            if (uiState is VaultUiState.Unlocking) {
-                CircularProgressIndicator(color = HotVaultAccent)
-            } else {
-                Button(
-                    onClick = {
-                        onCreateVault(passwordInput.toCharArray(), confirmInput.toCharArray())
-                        passwordInput = ""
-                        confirmInput = ""
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    enabled = passwordInput.isNotEmpty() && confirmInput.isNotEmpty(),
-                    colors = ButtonDefaults.buttonColors(containerColor = HotVaultAccent)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Create master key",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = HotVaultCanvas
-                        )
-                        Icon(
-                            painter = painterResource(R.drawable.ic_chevron_right),
-                            contentDescription = null,
-                            tint = HotVaultCanvas,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Footer
-        Text(
-            text = "Protected by Dual-Chamber Architecture",
-            style = MaterialTheme.typography.labelMedium,
-            color = TextMuted,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(24.dp)
-        )
+    ) {
+        SecurePassphraseField(passwordState, "New Master Passphrase", Modifier.fillMaxWidth())
+        Spacer(modifier = Modifier.height(12.dp))
+        SecurePassphraseField(confirmState, "Confirm Passphrase", Modifier.fillMaxWidth())
     }
 }
 
@@ -202,7 +96,38 @@ fun UnlockScreen(
     uiState: VaultUiState,
     onUnlock: (CharArray) -> Unit
 ) {
-    var passwordInput by remember { mutableStateOf("") }
+    val passwordState = remember { TextFieldState() }
+
+    LockScreenLayout(
+        badge = "DAILY UNLOCK",
+        iconDescription = "Lock",
+        title = "Arlix",
+        subtitle = "Enter your Master Passphrase",
+        uiState = uiState,
+        buttonText = "Unlock vault",
+        buttonEnabled = passwordState.text.isNotEmpty(),
+        onButtonClick = {
+            onUnlock(passwordState.toSecretChars())
+            passwordState.clearText()
+        }
+    ) {
+        SecurePassphraseField(passwordState, "Master Passphrase", Modifier.fillMaxWidth())
+    }
+}
+
+/** Shared layout for the setup and unlock screens (they were near-identical copies). */
+@Composable
+private fun LockScreenLayout(
+    badge: String,
+    iconDescription: String,
+    title: String,
+    subtitle: String,
+    uiState: VaultUiState,
+    buttonText: String,
+    buttonEnabled: Boolean,
+    onButtonClick: () -> Unit,
+    fields: @Composable ColumnScope.() -> Unit
+) {
     val isThirdPartyIme = rememberIsThirdPartyImeActive()
 
     Box(modifier = Modifier.fillMaxSize().background(HotVaultCanvas)) {
@@ -214,47 +139,33 @@ fun UnlockScreen(
                 .padding(horizontal = 12.dp, vertical = 4.dp)
         ) {
             Text(
-                text = "DAILY UNLOCK",
+                text = badge,
                 style = MaterialTheme.typography.labelMedium.copy(fontSize = 10.sp),
                 color = TextMuted
             )
         }
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
+            modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .background(HotVaultBorder, CircleShape),
+                modifier = Modifier.size(64.dp).background(HotVaultBorder, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_shield),
-                    contentDescription = "Lock",
+                    contentDescription = iconDescription,
                     modifier = Modifier.size(32.dp),
                     tint = TextPrimary
                 )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-
-            Text(
-                text = "Arlix",
-                style = MaterialTheme.typography.titleLarge,
-                color = TextPrimary
-            )
-
+            Text(text = title, style = MaterialTheme.typography.titleLarge, color = TextPrimary)
             Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Enter your Master Passphrase",
-                style = MaterialTheme.typography.bodyMedium,
-                color = TextMuted
-            )
+            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = TextMuted)
             Spacer(modifier = Modifier.height(32.dp))
 
             if (isThirdPartyIme) {
@@ -266,12 +177,7 @@ fun UnlockScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            SecureVaultTextField(
-                value = passwordInput,
-                onValueChange = { passwordInput = it },
-                placeholder = "Master Passphrase",
-                modifier = Modifier.fillMaxWidth()
-            )
+            fields()
             Spacer(modifier = Modifier.height(24.dp))
 
             if (uiState is VaultUiState.Error) {
@@ -287,12 +193,9 @@ fun UnlockScreen(
                 CircularProgressIndicator(color = HotVaultAccent)
             } else {
                 Button(
-                    onClick = {
-                        onUnlock(passwordInput.toCharArray())
-                        passwordInput = ""
-                    },
+                    onClick = onButtonClick,
                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                    enabled = passwordInput.isNotEmpty(),
+                    enabled = buttonEnabled,
                     colors = ButtonDefaults.buttonColors(containerColor = HotVaultAccent)
                 ) {
                     Row(
@@ -301,7 +204,7 @@ fun UnlockScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Unlock vault",
+                            text = buttonText,
                             style = MaterialTheme.typography.labelLarge,
                             color = HotVaultCanvas
                         )
@@ -320,9 +223,7 @@ fun UnlockScreen(
             text = "Protected by Dual-Chamber Architecture",
             style = MaterialTheme.typography.labelMedium,
             color = TextMuted,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(24.dp)
+            modifier = Modifier.align(Alignment.BottomCenter).padding(24.dp)
         )
     }
 }

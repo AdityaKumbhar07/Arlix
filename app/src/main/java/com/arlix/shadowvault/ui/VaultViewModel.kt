@@ -3,52 +3,44 @@ package com.arlix.shadowvault.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.arlix.shadowvault.crypto.constantTimeEquals
 import com.arlix.shadowvault.domain.IVaultRepository
 import com.arlix.shadowvault.domain.VaultEntry
 import com.arlix.shadowvault.domain.usecase.LockVaultUseCase
 import com.arlix.shadowvault.domain.usecase.UnlockVaultUseCase
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import com.arlix.shadowvault.crypto.constantTimeEquals
-
-// ---------------------------------------------------------------------------
-// UI State — represents every screen the user can be on
-// ---------------------------------------------------------------------------
+import kotlinx.coroutines.withContext
 
 sealed class VaultUiState {
-    /**
-     * The vault DB file does not exist yet — FIRST LAUNCH state.
-     * LockScreen shows "Create Master Passphrase" with a confirm field.
-     */
+    /** First launch: no vault file exists yet. */
     data class Setup(val isColdVault: Boolean = false) : VaultUiState()
 
-    /** Vault exists, waiting for the user to type their passphrase. */
+    /** Vault exists, waiting for the passphrase. */
     object Locked : VaultUiState()
 
-    /** Argon2id derivation + SQLCipher file open in progress. */
+    /** Key derivation + SQLCipher open in progress. */
     object Unlocking : VaultUiState()
 
-    /** Vault is open, credential list available. */
-    data class Unlocked(val entries: List<VaultEntry>, val isColdVault: Boolean) : VaultUiState()
-
-    /** Add Credential form is visible. */
-    data class AddingCredential(val isColdVault: Boolean) : VaultUiState()
-
     /**
-     * An error occurred — wrong password, corrupted vault, etc.
-     * The LockScreen shows this message and presents the UNLOCK button again.
-     * NOTE: We do NOT automatically transition out of this state — the user must retry.
-     * This ensures the error message stays visible long enough to be read (Bug 2 fix).
+     * Vault is open. [revision] changes on every publish so the UI always receives the
+     * fresh entries (StateFlow would otherwise skip "equal" states, and entry equality is by id only).
      */
+    data class Unlocked(
+        val entries: List<VaultEntry>,
+        val isColdVault: Boolean,
+        val revision: Long = 0L
+    ) : VaultUiState()
+
+    /** Wrong password, corrupted vault, failed save, etc. Shown on the LockScreen. */
     data class Error(val message: String, val isSetupMode: Boolean = false) : VaultUiState()
 }
-
-// ---------------------------------------------------------------------------
-// ViewModel
-// ---------------------------------------------------------------------------
 
 class VaultViewModel(
     private val unlockVaultUseCase: UnlockVaultUseCase,
@@ -57,264 +49,271 @@ class VaultViewModel(
     private val saltProvider: (isColdVault: Boolean) -> ByteArray
 ) : ViewModel() {
 
+    private companion object {
+        const val MIN_PASSPHRASE_LENGTH = 5
+        const val MSG_WRONG = "Incorrect Password or Corrupted Vault."
+        const val MSG_WRONG_COLD = "Incorrect Cold Vault Key or Corrupted Vault."
+        const val MSG_MEMORY = "Not enough free memory to unlock. Close other apps and try again."
+    }
+
     private val _uiState = MutableStateFlow<VaultUiState>(VaultUiState.Locked)
     val uiState: StateFlow<VaultUiState> = _uiState.asStateFlow()
 
     private val _selectedCategory = MutableStateFlow("All")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
 
-    fun setCategoryFilter(category: String) {
-        _selectedCategory.value = category
-        val currentState = _uiState.value
-        if (currentState is VaultUiState.Unlocked) {
-            val filtered = if (category == "All") currentEntries else currentEntries.filter { it.category == category }
-            _uiState.value = VaultUiState.Unlocked(filtered, currentState.isColdVault)
-        }
-    }
-
-    /** Wipes every password CharArray in a list before the list reference is dropped. */
-    private fun wipeEntries(entries: List<VaultEntry>) {
-        entries.forEach { it.annihilate() }
-    }
-
-    /**
-     * Cold vault operation error — used ONLY for errors that happen while the user is
-     * already on the Dashboard (cold vault dialog). These must NOT change [_uiState]
-     * because that would navigate away from the Dashboard to the LockScreen (Bug 1a fix).
-     */
+    /** Errors from cold-vault operations while the Dashboard is showing (must not navigate away). */
     private val _coldVaultError = MutableStateFlow<String?>(null)
     val coldVaultError: StateFlow<String?> = _coldVaultError.asStateFlow()
 
     private var currentEntries: List<VaultEntry> = emptyList()
+    private var openVaultIsCold = false   // which vault is actually open right now
+    private var revision = 0L
     private var dbJob: Job? = null
     private var unlockJob: Job? = null
 
-    /**
-     * Guard against re-entrant cold vault operations.
-     * (Hot vault re-entrancy is already guarded by the Unlocking state check.)
-     */
+    /** Guard against re-entrant cold vault operations. */
     @Volatile private var coldVaultInProgress = false
+    /** True while switching hot to cold; the hot reader's errors are expected then. */
+    @Volatile private var switchingVaults = false
 
     init {
         if (!vaultRepository.vaultExists(isColdVault = false)) {
             _uiState.value = VaultUiState.Setup(isColdVault = false)
         }
         viewModelScope.launch {
-            lockVaultUseCase.lockEvents.collect {
-                unlockJob?.cancel()
-                unlockJob = null
-                dbJob?.cancel()
-                dbJob = null
-                wipeEntries(currentEntries)
-                currentEntries = emptyList()
-                _uiState.value = if (vaultRepository.vaultExists()) VaultUiState.Locked
-                                 else VaultUiState.Setup()
+            lockVaultUseCase.lockEvents.collect { resetToLocked() }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Helpers
+    // ------------------------------------------------------------------
+
+    private fun isLockedOrSetup(): Boolean =
+        _uiState.value.let { it is VaultUiState.Locked || it is VaultUiState.Setup }
+
+    /** Publishes the current entries to the UI. The category filter only applies to the hot vault. */
+    private fun publishUnlocked() {
+        val cat = _selectedCategory.value
+        val shown = if (openVaultIsCold || cat == "All") currentEntries
+        else currentEntries.filter { it.category == cat }
+        _uiState.value = VaultUiState.Unlocked(shown, openVaultIsCold, ++revision)
+    }
+
+    private fun wipeCurrentEntries() {
+        currentEntries.forEach { it.annihilate() }
+        currentEntries = emptyList()
+    }
+
+    /** Wipes everything held in memory and returns to the lock (or setup) screen. */
+    private fun resetToLocked(cancelUnlockJob: Boolean = true) {
+        if (cancelUnlockJob) {
+            unlockJob?.cancel()
+            unlockJob = null
+        }
+        dbJob?.cancel()
+        dbJob = null
+        wipeCurrentEntries()
+        openVaultIsCold = false
+        _selectedCategory.value = "All"
+        _coldVaultError.value = null
+        _uiState.value = if (vaultRepository.vaultExists()) VaultUiState.Locked
+        else VaultUiState.Setup()
+    }
+
+    private fun failHot(message: String) {
+        if (isLockedOrSetup()) return
+        _uiState.value = VaultUiState.Error(
+            message,
+            isSetupMode = !vaultRepository.vaultExists(isColdVault = false)
+        )
+    }
+
+    /**
+     * Starts reading the open vault. New entries are published to the UI FIRST,
+     * and only then are the old arrays wiped, so the UI never reads a wiped password.
+     */
+    private fun startCollecting(isCold: Boolean) {
+        openVaultIsCold = isCold
+        dbJob?.cancel()
+        dbJob = viewModelScope.launch {
+            try {
+                vaultRepository.getAllEntries().collect { entries ->
+                    val old = currentEntries
+                    currentEntries = entries
+                    if (!isLockedOrSetup()) publishUnlocked()
+                    old.forEach { it.annihilate() }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // If the vault was closed on purpose (lock / vault switch) this is expected.
+                if (!switchingVaults && vaultRepository.isVaultOpen() && !isLockedOrSetup()) {
+                    if (isCold) _coldVaultError.value = "Failed to load cold vault entries."
+                    else _uiState.value = VaultUiState.Error("Vault read error. Please re-unlock.")
+                }
             }
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // FIRST-LAUNCH: Create a new vault with a validated passphrase
-    // ---------------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // Category filter
+    // ------------------------------------------------------------------
+
+    fun setCategoryFilter(category: String) {
+        _selectedCategory.value = category
+        if (_uiState.value is VaultUiState.Unlocked && !openVaultIsCold) publishUnlocked()
+    }
+
+    // ------------------------------------------------------------------
+    // Create vault
+    // ------------------------------------------------------------------
 
     fun createVault(password: CharArray, confirmPassword: CharArray, isColdVault: Boolean = false) {
-        // [T20] Passphrase strength checked at creation only.
-        if (password.size < 5) {
-            val msg = "Passphrase must be at least 5 characters."
-            if (isColdVault) _coldVaultError.value = msg           // Bug 1a fix: stay on Dashboard
-            else _uiState.value = VaultUiState.Error(msg, isSetupMode = true)
-            password.fill('\u0000')
-            confirmPassword.fill('\u0000')
-            return
-        }
-        if (!constantTimeEquals(password, confirmPassword)) {
-            val msg = "Passphrases do not match. Please try again."
-            if (isColdVault) _coldVaultError.value = msg           // Bug 1a fix: stay on Dashboard
-            else _uiState.value = VaultUiState.Error(msg, isSetupMode = true)
-            password.fill('\u0000')
-            confirmPassword.fill('\u0000')
-            return
+        // [T20] Passphrase strength is checked at creation only.
+        val error = when {
+            password.size < MIN_PASSPHRASE_LENGTH ->
+                "Passphrase must be at least $MIN_PASSPHRASE_LENGTH characters."
+            !constantTimeEquals(password, confirmPassword) ->
+                "Passphrases do not match. Please try again."
+            else -> null
         }
         confirmPassword.fill('\u0000')
 
-        // Route to the correct unlock path based on vault type
-       if (isColdVault) unlockColdVaultInternal(password)
-       else unlockHotVaultInternal(password)
-    }
+        if (error != null) {
+            if (isColdVault) _coldVaultError.value = error   // stay on the Dashboard
+            else _uiState.value = VaultUiState.Error(error, isSetupMode = true)
+            password.fill('\u0000')
+            return
+        }
 
-    // ---------------------------------------------------------------------------
-    // REGULAR UNLOCK
-    // ---------------------------------------------------------------------------
-
-    fun unlock(password: CharArray, isColdVault: Boolean = false) {
         if (isColdVault) {
-            // Cold vault: guard with its own flag, NOT the Unlocking state check
             if (coldVaultInProgress) { password.fill('\u0000'); return }
             unlockColdVaultInternal(password)
         } else {
-            // Hot vault: re-entrancy guard via state check
-            if (_uiState.value is VaultUiState.Unlocking) { password.fill('\u0000'); return }
             unlockHotVaultInternal(password)
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // HOT VAULT unlock path — may change global _uiState (normal navigation)
-    // ---------------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // Unlock
+    // ------------------------------------------------------------------
+
+    fun unlock(password: CharArray, isColdVault: Boolean = false) {
+        if (isColdVault) {
+            if (coldVaultInProgress) { password.fill('\u0000'); return }
+            unlockColdVaultInternal(password)
+        } else {
+            if (_uiState.value is VaultUiState.Unlocking) { password.fill('\u0000'); return }
+            unlockHotVaultInternal(password)
+        }
+    }
 
     private fun unlockHotVaultInternal(password: CharArray) {
         _uiState.value = VaultUiState.Unlocking
 
         unlockJob = viewModelScope.launch {
             try {
-                unlockVaultUseCase(password, saltProvider(false), isColdVault = false)
-                // password is zeroed inside UnlockVaultUseCase's finally block
-
-                dbJob?.cancel()
-                dbJob = viewModelScope.launch {
-                    try {
-                        vaultRepository.getAllEntries().collect { entries ->
-                            wipeEntries(currentEntries)
-                            currentEntries = entries
-                            if (_uiState.value !is VaultUiState.AddingCredential && _uiState.value !is VaultUiState.Locked) {
-                                val cat = _selectedCategory.value
-                                val filtered = if (cat == "All") entries else entries.filter { it.category == cat }
-                                _uiState.value = VaultUiState.Unlocked(filtered, isColdVault = false)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException) throw e
-                        if (_uiState.value !is VaultUiState.Locked) {
-                            _uiState.value = VaultUiState.Error("Vault read error. Please re-unlock.")
-                        }
-                    }
-                }
+                // Salt file I/O stays off the main thread.
+                val salt = withContext(Dispatchers.IO) { saltProvider(false) }
+                unlockVaultUseCase(password, salt, isColdVault = false)
+                startCollecting(isCold = false)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: OutOfMemoryError) {
+                failHot(MSG_MEMORY)
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                if (_uiState.value !is VaultUiState.Locked) {
-                    _uiState.value = VaultUiState.Error("Incorrect Password or Corrupted Vault.")
-                }
+                failHot(MSG_WRONG)
+            } finally {
+                password.fill('\u0000') // also covers a cancel before the use case ran
             }
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // COLD VAULT unlock path — must NOT change _uiState while Dashboard is showing
-    // ---------------------------------------------------------------------------
-
     /**
-     * Unlocks or creates the Cold Vault without triggering LockScreen navigation.
-     *
-     * Success transitions to Unlocked(cold vault).
-     * Failure transitions to Locked because the hot vault was already closed by openVault().
+     * Opens or creates the Cold Vault without navigating away from the Dashboard.
+     * The hot vault stays open until the cold key is proven correct, so a wrong
+     * cold key only shows an error and leaves the user where they are.
      */
     private fun unlockColdVaultInternal(password: CharArray) {
         coldVaultInProgress = true
-        _coldVaultError.value = null // clear any previous error
+        switchingVaults = true
+        _coldVaultError.value = null
 
         unlockJob = viewModelScope.launch {
             try {
-                // This closes the hot vault and opens the cold vault (Dispatchers.IO inside UseCase)
-                unlockVaultUseCase(password, saltProvider(true), isColdVault = true)
-
-                // Success: transition to Cold Vault Dashboard
-                dbJob?.cancel()
-                dbJob = viewModelScope.launch {
-                    try {
-                        vaultRepository.getAllEntries().collect { entries ->
-                            wipeEntries(currentEntries)
-                            currentEntries = entries
-                            if (_uiState.value !is VaultUiState.AddingCredential) {
-                                val cat = _selectedCategory.value
-                                val filtered = if (cat == "All") entries else entries.filter { it.category == cat }
-                                _uiState.value = VaultUiState.Unlocked(filtered, isColdVault = true)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException) throw e
-                        _coldVaultError.value = "Failed to load cold vault entries."
-                    }
-                }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                // Cold vault open failed. openVault() already called closeVault() first,
-                // so the hot vault is also now closed. Both vaults are in a closed state.
-                // We must go to Locked so the user can re-authenticate.
-                _coldVaultError.value = "Incorrect Cold Vault Key or Corrupted Vault."
-                // Brief delay so the error appears in the dialog before we navigate away
-                kotlinx.coroutines.delay(1500)
-                _uiState.value = VaultUiState.Locked
+                val salt = withContext(Dispatchers.IO) { saltProvider(true) }
+                unlockVaultUseCase(password, salt, isColdVault = true)
+                // Success: the repository swapped to the cold DB and closed the hot one.
+                startCollecting(isCold = true) // also cancels the old hot reader
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                if (e is Error && e !is OutOfMemoryError) throw e
+                // Hot vault is untouched and still open: show the message, stay on the Dashboard.
+                _coldVaultError.value = if (e is OutOfMemoryError) MSG_MEMORY else MSG_WRONG_COLD
             } finally {
+                password.fill('\u0000')
+                switchingVaults = false
                 coldVaultInProgress = false
             }
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // LOCK
-    // ---------------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // Lock
+    // ------------------------------------------------------------------
 
     fun lock() {
-        viewModelScope.launch {
-            lockVaultUseCase()
-        }
+        viewModelScope.launch { lockVaultUseCase() }
     }
 
-    // ---------------------------------------------------------------------------
-    // Cold Vault helpers
-    // ---------------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // Cold vault helpers
+    // ------------------------------------------------------------------
 
     fun coldVaultExists(): Boolean = vaultRepository.vaultExists(isColdVault = true)
 
-    /** Called by DashboardScreen when the cold vault dialog is dismissed, to clear stale errors. */
     fun clearColdVaultError() { _coldVaultError.value = null }
 
-    // ---------------------------------------------------------------------------
-    // Credential management
-    // ---------------------------------------------------------------------------
+    // ------------------------------------------------------------------
+    // Credentials. The Room Flow re-emits after every write, so the list refreshes by itself.
+    // ------------------------------------------------------------------
 
-    fun navigateToAddCredential(isColdVault: Boolean) {
-        _uiState.value = VaultUiState.AddingCredential(isColdVault)
-    }
-
-    fun cancelAddCredential(isColdVault: Boolean) {
-        if (_uiState.value !is VaultUiState.Locked) {
-            val cat = _selectedCategory.value
-            val filtered = if (cat == "All") currentEntries else currentEntries.filter { it.category == cat }
-            _uiState.value = VaultUiState.Unlocked(filtered, isColdVault)
-        }
-    }
-
+    /** Saves a new entry, or overwrites an existing one with the same id (used by Edit). */
     fun addCredential(entry: VaultEntry) {
         viewModelScope.launch {
             try {
-                val currentState = _uiState.value
-                val isColdVault = if (currentState is VaultUiState.AddingCredential) currentState.isColdVault else false
                 vaultRepository.addEntry(entry)
-                entry.annihilate()
-                if (_uiState.value !is VaultUiState.Locked) {
-                    val cat = _selectedCategory.value
-                    val filtered = if (cat == "All") currentEntries else currentEntries.filter { it.category == cat }
-                    _uiState.value = VaultUiState.Unlocked(filtered, isColdVault)
-                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (!isLockedOrSetup()) _uiState.value = VaultUiState.Error("Failed to save credential.")
+            } finally {
                 entry.annihilate()
-                if (_uiState.value !is VaultUiState.Locked) {
-                    _uiState.value = VaultUiState.Error("Failed to save credential.")
-                }
+            }
+        }
+    }
+
+    fun updateCredential(entry: VaultEntry) = addCredential(entry)
+
+    fun deleteCredential(entryId: String) {
+        viewModelScope.launch {
+            try {
+                vaultRepository.deleteEntry(entryId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (!isLockedOrSetup()) _uiState.value = VaultUiState.Error("Failed to delete credential.")
             }
         }
     }
 
     override fun onCleared() {
         super.onCleared()
-        wipeEntries(currentEntries)
-        currentEntries = emptyList()
+        wipeCurrentEntries()
     }
-
-    // ---------------------------------------------------------------------------
-    // Factory for manual DI
-    // ---------------------------------------------------------------------------
 
     class Factory(
         private val unlockVaultUseCase: UnlockVaultUseCase,

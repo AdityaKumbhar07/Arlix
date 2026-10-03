@@ -1,5 +1,12 @@
 package com.arlix.shadowvault.ui.components
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import com.arlix.shadowvault.ui.screens.ObscuredTouchGuard
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -127,23 +134,28 @@ fun CredentialDetailSheetContent(
     title: String,
     username: String,
     passwordSecret: CharArray,
+    notes: String,
     category: String,
     isColdVault: Boolean,
     onClose: () -> Unit,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
     var isRevealed by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
     val canvasColor = if (isColdVault) ColdVaultCanvas else HotVaultCanvas
     val borderColor = if (isColdVault) ColdVaultBorder else HotVaultBorder
     val accentColor = if (isColdVault) ColdVaultAccent else HotVaultAccent
     val initial = title.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+    val deleteRed = Color(0xFFD95757)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(canvasColor)
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
         // Header
@@ -292,12 +304,13 @@ fun CredentialDetailSheetContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Notes Card (Dummy)
+        // Notes Card
         DetailCardBox(title = "NOTES & DETAILS", borderColor = borderColor) {
+            val hasNotes = notes.isNotBlank()
             Text(
-                text = "No notes available for this credential.",
+                text = if (hasNotes) notes else "No notes available for this credential.",
                 style = MaterialTheme.typography.bodyMedium,
-                color = TextMuted
+                color = if (hasNotes) TextPrimary else TextMuted
             )
         }
 
@@ -309,7 +322,7 @@ fun CredentialDetailSheetContent(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             OutlinedButton(
-                onClick = { /* Dummy Edit */ },
+                onClick = onEdit,
                 modifier = Modifier
                     .weight(1f)
                     .height(56.dp),
@@ -318,14 +331,14 @@ fun CredentialDetailSheetContent(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_more_vert), // using more_vert as placeholder for edit icon since we lack edit
+                        imageVector = Icons.Filled.Edit,
                         contentDescription = "Edit",
                         tint = TextPrimary,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Edit Credential",
+                        text = "Edit",
                         style = MaterialTheme.typography.labelLarge,
                         color = TextPrimary
                     )
@@ -333,30 +346,55 @@ fun CredentialDetailSheetContent(
             }
 
             Button(
-                onClick = onDelete,
+                onClick = { showDeleteConfirm = true },
                 modifier = Modifier
                     .weight(1f)
                     .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF0F0)) // Light Red
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF0F0))
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_close), // using close as placeholder for trash
+                        imageVector = Icons.Filled.Delete,
                         contentDescription = "Delete",
-                        tint = Color(0xFFD95757),
+                        tint = deleteRed,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Delete",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color(0xFFD95757)
+                        color = deleteRed
                     )
                 }
             }
         }
         Spacer(modifier = Modifier.height(24.dp))
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            containerColor = canvasColor,
+            title = { Text("Delete credential?", color = TextPrimary) },
+            text = {
+                ObscuredTouchGuard()
+                Text(
+                    "\"$title\" will be permanently deleted. This cannot be undone.",
+                    color = TextMuted
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showDeleteConfirm = false; onDelete() }) {
+                    Text("Delete", color = deleteRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel", color = TextPrimary)
+                }
+            }
+        )
     }
 }
 

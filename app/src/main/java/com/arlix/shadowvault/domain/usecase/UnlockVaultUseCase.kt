@@ -17,7 +17,7 @@ class UnlockVaultUseCase(
      * Derives the Argon2id master key and opens the corresponding SQLCipher vault.
      *
      * @param password The raw password CharArray typed by the user. WILL BE ZEROED after use.
-     * @param salt The unique per-device salt loaded from EncryptedSharedPreferences.
+     * @param salt The per-vault random salt (stored in a plain file; a salt is not secret).
      * @param isColdVault True if this is the hidden secondary vault (Cold Vault path).
      * @return True if the vault was opened successfully.
      *

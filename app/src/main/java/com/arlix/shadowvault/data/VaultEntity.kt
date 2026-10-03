@@ -5,20 +5,12 @@ import androidx.room.PrimaryKey
 import com.arlix.shadowvault.domain.VaultEntry
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
+import java.nio.charset.CodingErrorAction
 
 /**
- * The internal SQLite table definition for SQLCipher.
- *
- * HONEST NAMING NOTE:
- * The field is named `passwordBytes` (not `passwordEncrypted`) because at this phase,
- * the password is stored as raw UTF-8 bytes in a BLOB column. SQLCipher transparently
- * AES-256 encrypts every page of the database file — so the bytes are protected at the
- * storage level.
- *
- * MEMORY NOTE:
- * Room maps this BLOB column to a ByteArray. We never create a String from it. The ByteArray
- * is converted back to a CharArray via NIO (ByteBuffer → CharBuffer) without touching
- * the JVM String pool. [T11] closed in data layer.
+ * The SQLite table definition. SQLCipher encrypts every page of the file, so the BLOB is
+ * protected on disk. In memory, the password lives in [passwordBytes] only briefly:
+ * the repository wipes it right after [toDomain] is called.
  */
 @Entity(tableName = "credentials")
 data class VaultEntity(
@@ -27,23 +19,28 @@ data class VaultEntity(
     val username: String,
     val notes: String,
     val category: String,
-    // Stored as UTF-8 BLOB. Room maps ByteArray to SQLite BLOB natively — no TypeConverter needed.
     val passwordBytes: ByteArray,
     val createdAt: Long,
     val modifiedAt: Long
 ) {
-    /**
-     * Maps this DB row back to the pure Domain object.
-     *
-     * ByteArray → CharArray via NIO — no String allocation on the JVM heap.
-     * ByteBuffer.wrap() references the existing array in-place; CharBuffer.decode() writes
-     * directly into a CharArray without creating an intermediate String object.
-     */
+    /** Converts this row to the domain object without creating a String for the password. */
     fun toDomain(): VaultEntry {
-        val charBuffer: CharBuffer = Charsets.UTF_8.decode(ByteBuffer.wrap(passwordBytes))
-        // charBuffer.array() may be larger than the actual content; use limit() to be precise
-        val passwordChars = CharArray(charBuffer.limit())
-        charBuffer.get(passwordChars)
+        val decoder = Charsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPLACE)
+            .onUnmappableCharacter(CodingErrorAction.REPLACE)
+        // UTF-8 never produces more chars than bytes, so this is always big enough.
+        val scratch = CharBuffer.allocate(passwordBytes.size)
+        val passwordChars: CharArray
+        try {
+            decoder.decode(ByteBuffer.wrap(passwordBytes), scratch, true)
+            decoder.flush(scratch)
+            scratch.flip()
+            passwordChars = CharArray(scratch.remaining())
+            scratch.get(passwordChars)
+        } finally {
+            // The scratch buffer also holds the password; zero it.
+            java.util.Arrays.fill(scratch.array(), '\u0000')
+        }
         return VaultEntry(
             id = id,
             title = title,
@@ -56,7 +53,7 @@ data class VaultEntity(
         )
     }
 
-    // Required because ByteArray overrides equals/hashCode by identity, not content
+    // ByteArray uses identity equality, so compare by id only.
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

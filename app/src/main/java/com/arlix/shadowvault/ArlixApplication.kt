@@ -16,7 +16,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 class ArlixApplication : Application(), DefaultLifecycleObserver {
 
@@ -59,12 +58,10 @@ class ArlixApplication : Application(), DefaultLifecycleObserver {
     }
 
     override fun onStop(owner: LifecycleOwner) {
-        // Fires only when the ENTIRE app (all activities) has left the foreground —
-        // not on transient dialogs, rotation, or single-activity pause/resume churn.
-        runBlocking { lockUseCase() }
-        // runBlocking is deliberate here: onStop has no coroutine scope guarantee to
-        // survive past this callback, and the lock operation (DB close + native wipe)
-        // must complete before the process is eligible for backgrounding/kill.
-        // This operation is fast (DB close, no Argon2id math) — acceptable to block.
+        // ProcessLifecycleOwner fires ON_STOP only after ALL activities have been stopped
+        // for ~700 ms, so rotation and short dialogs never reach here.
+        // Deliberately NOT blocking the main thread: if the process is killed, the keys
+        // disappear with it, so there is nothing that must finish first.
+        applicationScope.launch { lockUseCase() }
     }
 }

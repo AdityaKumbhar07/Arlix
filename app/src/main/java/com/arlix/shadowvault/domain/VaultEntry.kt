@@ -19,7 +19,7 @@ data class VaultEntry(
     val modifiedAt: Long = System.currentTimeMillis()
 ) {
     /**
-     * Instantly wipes the password from physical RAM by overwriting it with empty spaces.
+     * Instantly wipes the password from physical RAM by overwriting it with zero characters.
      */
     fun annihilate() {
         passwordSecret.fill('\u0000')

@@ -7,17 +7,16 @@ import org.bouncycastle.crypto.generators.Argon2BytesGenerator
 import org.bouncycastle.crypto.params.Argon2Parameters
 import java.nio.ByteBuffer
 import java.nio.CharBuffer
+import java.nio.charset.CodingErrorAction
 
 class ShadowCryptoProvider : ICryptoProvider {
 
     override suspend fun deriveMasterKey(password: CharArray, salt: ByteArray): ByteArray {
-        // [T20] Passphrase strength checked at creation only, not on every unlock.
-
-        // Run Argon2id on background CPU-thread to prevent UI freeze (ANR).
+        // Argon2id runs on a background thread to avoid freezing the UI (ANR).
         return withContext(Dispatchers.Default) {
-            val result = ByteArray(32) // 256-bit key output
+            val result = ByteArray(32) // 256-bit key
 
-            // [T8] Argon2id — Memory-hard KDF configured for QA memory limits.
+            // [T8] Argon2id: 64 MiB memory, 3 passes, 4 lanes.
             val parameters = Argon2Parameters.Builder(Argon2Parameters.ARGON2_id)
                 .withVersion(Argon2Parameters.ARGON2_VERSION_13)
                 .withIterations(3)
@@ -29,15 +28,12 @@ class ShadowCryptoProvider : ICryptoProvider {
             val generator = Argon2BytesGenerator()
             generator.init(parameters)
 
-            // Convert CharArray → UTF-8 ByteArray WITHOUT allocating a String on the JVM heap.
-            // [T11] String(chars) would pin plaintext in heap indefinitely. See charArrayToUtf8Bytes doc.
             val passwordBytes = charArrayToUtf8Bytes(password)
             try {
                 generator.generateBytes(passwordBytes, result, 0, result.size)
             } finally {
                 wipe(passwordBytes)
             }
-
             result
         }
     }
@@ -46,38 +42,42 @@ class ShadowCryptoProvider : ICryptoProvider {
         try {
             MemorySanitizer.wipeNative(buffer)
         } catch (e: UnsatisfiedLinkError) {
-            // Fallback for host-JVM unit tests where the .so isn't loaded
+            // Host-JVM unit tests: native library not loaded.
             buffer.fill(0)
         }
     }
 }
 
 /**
- * Converts a CharArray to a UTF-8 encoded ByteArray using the Java NIO path.
+ * Converts a CharArray to UTF-8 bytes without creating a String.
  *
- * WHY THIS EXISTS:
- * The naive way — String(chars).toByteArray(UTF_8) — allocates an immutable String on the
- * JVM heap. Immutable Strings cannot be zeroed. A memory forensics tool (or GC heap dump)
- * would expose the plaintext password indefinitely. This is exactly "The JVM String Trap" (T11).
+ * The encoder needs a scratch buffer that is larger than the final result. That scratch
+ * buffer also contains the password, so it is zeroed before returning. The caller must
+ * wipe the returned array after use.
  *
- * THIS approach:
- * 1. CharBuffer.wrap(chars) — wraps the ORIGINAL array in-place. Zero copy. Zero allocation.
- * 2. encoder.encode(cb) — writes UTF-8 bytes directly into a new ByteBuffer. No String object.
- * 3. We drain the ByteBuffer into a plain ByteArray, which we can explicitly wipe later via wipeNative().
- *
- * The caller is responsible for calling wipe() on the returned ByteArray after use.
+ * Malformed input (e.g. a lone surrogate) is replaced instead of throwing, so a strange
+ * character can never crash vault creation. The same input always gives the same bytes.
  */
 fun charArrayToUtf8Bytes(chars: CharArray): ByteArray {
-    val cb: CharBuffer = CharBuffer.wrap(chars)
-    val bb: ByteBuffer = Charsets.UTF_8.newEncoder().encode(cb)
-    val bytes = ByteArray(bb.limit())
-    bb.get(bytes)
-    return bytes
+    val encoder = Charsets.UTF_8.newEncoder()
+        .onMalformedInput(CodingErrorAction.REPLACE)
+        .onUnmappableCharacter(CodingErrorAction.REPLACE)
+    val scratch = ByteBuffer.allocate((chars.size * encoder.maxBytesPerChar()).toInt() + 4)
+    try {
+        encoder.encode(CharBuffer.wrap(chars), scratch, true)
+        encoder.flush(scratch)
+        scratch.flip()
+        val out = ByteArray(scratch.remaining())
+        scratch.get(out)
+        return out
+    } finally {
+        java.util.Arrays.fill(scratch.array(), 0.toByte())
+    }
 }
 
 /**
- * Constant-time comparison for sensitive character arrays (e.g., passwords).
- * [T9] Mitigates timing side-channel attacks.
+ * Compares two locally typed passphrases (setup confirm field). Constant-time is harmless
+ * here but not security-critical: both values come from the same user on the same device.
  */
 fun constantTimeEquals(a: CharArray, b: CharArray): Boolean {
     if (a.size != b.size) return false
