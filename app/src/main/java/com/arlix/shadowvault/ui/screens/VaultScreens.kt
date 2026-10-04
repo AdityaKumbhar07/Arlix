@@ -1,5 +1,6 @@
 package com.arlix.shadowvault.ui.screens
 
+import androidx.compose.animation.core.animate
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,13 +18,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.view.ViewCompat.animate
 import com.arlix.shadowvault.BuildConfig
 import com.arlix.shadowvault.R
 import com.arlix.shadowvault.domain.VaultEntry
@@ -66,28 +70,35 @@ fun HotVaultScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Arlix", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                actions = {
-                    IconButton(onClick = onLock) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_lock),
-                            contentDescription = "Lock Vault",
-                            tint = TextPrimary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    IconButton(onClick = { showSettingsSheet = true }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_gear),
-                            contentDescription = "Settings",
-                            tint = TextPrimary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = HotVaultCanvas)
-            )
+            Column {
+                TopAppBar(
+                    title = { Text("Arlix", color = TextPrimary, fontWeight = FontWeight.Bold)},
+                    actions = {
+                        IconButton(onClick = onLock) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_lock),
+                                contentDescription = "Lock Vault",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        IconButton(onClick = { showSettingsSheet = true }) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_gear),
+                                contentDescription = "Settings",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = HotVaultCanvas)
+                )
+                HorizontalDivider(
+                    modifier = Modifier.offset(y = 5.dp),
+                    color = HotVaultBorder,
+                    thickness = 1.dp
+                )
+            }
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -110,6 +121,7 @@ fun HotVaultScreen(
                     FilterChip(
                         selected = selectedCategory == category,
                         onClick = { onCategorySelected(category) },
+                        shape = RoundedCornerShape(50),
                         label = {
                             Text(
                                 category,
@@ -119,11 +131,24 @@ fun HotVaultScreen(
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = HotVaultAccent,
                             selectedLabelColor = HotVaultCanvas,
-                            containerColor = Color.Transparent
+                            containerColor = Color.White
+                        ),
+                        border = FilterChipDefaults.filterChipBorder(
+                            enabled = true,
+                            selected = selectedCategory == category,
+                            borderColor = if (selectedCategory == category) HotVaultAccent else HotVaultBorder
                         )
                     )
                 }
             }
+
+            HorizontalDivider(
+                modifier = Modifier.offset(y = -3.dp),
+                color = HotVaultBorder,
+                thickness = 1.dp
+            )
+
+            Spacer(modifier = Modifier.height(15.dp))
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(entries, key = { it.id }) { entry ->
@@ -195,7 +220,7 @@ fun HotVaultScreen(
         ) {
             ObscuredTouchGuard()
             BottomSheetSecurity(showSheet = true) { showSettingsSheet = false }
-            Column(modifier = Modifier.padding(horizontal = 15.dp, vertical = 16.dp).fillMaxWidth()) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 15.dp).fillMaxWidth()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -205,7 +230,7 @@ fun HotVaultScreen(
                         "Settings & Info",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = TextPrimary
+                        color = TextPrimary,
                     )
                     IconButton(
                         onClick = { showSettingsSheet = false },
@@ -219,7 +244,9 @@ fun HotVaultScreen(
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = HotVaultBorder, thickness = 1.dp)
+                Spacer(modifier = Modifier.height(20.dp))
 
                 Text("Chamber Isolation", style = MaterialTheme.typography.labelLarge, color = TextMuted)
                 Spacer(modifier = Modifier.height(12.dp))
@@ -227,7 +254,7 @@ fun HotVaultScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
                     border = BorderStroke(1.dp, HotVaultBorder)
                 ) {
                     Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
@@ -296,7 +323,7 @@ fun HotVaultScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
                     border = BorderStroke(1.dp, HotVaultBorder)
                 ) {
                     Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
@@ -305,17 +332,17 @@ fun HotVaultScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Arlix Security Suite", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
+                            Text("Arlix", style = MaterialTheme.typography.labelLarge, color = TextPrimary)
                             Box(
                                 modifier = Modifier
-                                    .background(Color(0xFF7D9F81), RoundedCornerShape(16.dp))
-                                    .border(1.dp, Color(0xFF2D503B), RoundedCornerShape(16.dp))
+                                    .background(Color(0xFFedf2e7), RoundedCornerShape(16.dp))
+                                    .border(1.dp, Color(0xFFd5dfc9), RoundedCornerShape(16.dp))
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Text(
                                     "v${BuildConfig.VERSION_NAME}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = Color(0xFF254631)
+                                    color = Color(0xFF9AAB84)
                                 )
                             }
                         }
@@ -366,7 +393,7 @@ fun ColdVaultModal(
         ObscuredTouchGuard()
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = ColdVaultCanvas,
+            color = Color.White,
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -414,7 +441,7 @@ fun ColdVaultModal(
                 SecurePassphraseField(
                     state = coldState,
                     placeholder = if (coldVaultExists) "Cold Vault Key" else "New Cold Vault Key",
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().testTag("ColdVaultPasswordField")
                 )
 
                 if (!coldVaultExists) {
@@ -422,7 +449,7 @@ fun ColdVaultModal(
                     SecurePassphraseField(
                         state = confirmState,
                         placeholder = "Confirm Key",
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth().testTag("ColdVaultConfirmPasswordField")
                     )
                 }
 
@@ -489,19 +516,22 @@ fun ColdVaultScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Cold Chamber", color = TextPrimary, fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_arrow_left),
-                            contentDescription = "Lock Cold Vault",
-                            tint = TextPrimary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = ColdVaultCanvas)
-            )
+            Column {
+                TopAppBar(
+                    title = { Text("Arlix", color = TextPrimary, fontWeight = FontWeight.Bold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_arrow_left),
+                                contentDescription = "Lock Cold Vault",
+                                tint = TextPrimary
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = ColdVaultCanvas)
+                )
+                HorizontalDivider(color = ColdVaultBorder, thickness = 1.dp)
+            }
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -622,7 +652,18 @@ fun AddCredentialForm(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(24.dp))
+        val borderColor = if (isColdVault) ColdVaultBorder else HotVaultBorder
+        val accentColor = if (isColdVault) ColdVaultAccent else HotVaultAccent
+        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider(color = borderColor, thickness = 1.dp)
+        Spacer(modifier = Modifier.height(20.dp))
+
+        val textFieldColors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = Color.White,
+            unfocusedContainerColor = Color.White,
+            focusedBorderColor = accentColor,
+            unfocusedBorderColor = borderColor
+        )
 
         Text("SERVICE / TITLE", style = MaterialTheme.typography.labelSmall, color = TextMuted)
         Spacer(modifier = Modifier.height(4.dp))
@@ -631,6 +672,7 @@ fun AddCredentialForm(
             onValueChange = { title = it },
             placeholder = { Text("e.g. ProtonMail, GitHub", color = TextMuted) },
             shape = RoundedCornerShape(12.dp),
+            colors = textFieldColors,
             keyboardOptions = PlainTextKeyboardOptions,
             modifier = Modifier.fillMaxWidth()
         )
@@ -643,6 +685,7 @@ fun AddCredentialForm(
             onValueChange = { username = it },
             placeholder = { Text("e.g. user@example.com", color = TextMuted) },
             shape = RoundedCornerShape(12.dp),
+            colors = textFieldColors,
             keyboardOptions = PlainTextKeyboardOptions,
             modifier = Modifier.fillMaxWidth()
         )
@@ -653,7 +696,7 @@ fun AddCredentialForm(
         SecurePassphraseField(
             state = passwordState,
             placeholder = "Enter secret",
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().testTag("AddCredentialPasswordField")
         )
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -677,7 +720,7 @@ fun AddCredentialForm(
                         modifier = Modifier.weight(1f),
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = HotVaultAccent,
-                            containerColor = Color.Transparent
+                            containerColor = Color.White
                         ),
                         border = FilterChipDefaults.filterChipBorder(
                             enabled = true,
@@ -697,6 +740,7 @@ fun AddCredentialForm(
             onValueChange = { notes = it },
             placeholder = { Text("Additional secret notes...", color = TextMuted) },
             shape = RoundedCornerShape(12.dp),
+            colors = textFieldColors,
             keyboardOptions = PlainTextKeyboardOptions,
             modifier = Modifier.fillMaxWidth().height(100.dp)
         )

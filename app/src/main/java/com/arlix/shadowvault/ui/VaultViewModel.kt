@@ -9,6 +9,7 @@ import com.arlix.shadowvault.domain.VaultEntry
 import com.arlix.shadowvault.domain.usecase.LockVaultUseCase
 import com.arlix.shadowvault.domain.usecase.UnlockVaultUseCase
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -46,7 +47,8 @@ class VaultViewModel(
     private val unlockVaultUseCase: UnlockVaultUseCase,
     private val lockVaultUseCase: LockVaultUseCase,
     private val vaultRepository: IVaultRepository,
-    private val saltProvider: (isColdVault: Boolean) -> ByteArray
+    private val saltProvider: (isColdVault: Boolean) -> ByteArray,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     private companion object {
@@ -216,7 +218,7 @@ class VaultViewModel(
         unlockJob = viewModelScope.launch {
             try {
                 // Salt file I/O stays off the main thread.
-                val salt = withContext(Dispatchers.IO) { saltProvider(false) }
+                val salt = withContext(ioDispatcher) { saltProvider(false) }
                 unlockVaultUseCase(password, salt, isColdVault = false)
                 startCollecting(isCold = false)
             } catch (e: CancellationException) {
@@ -243,7 +245,7 @@ class VaultViewModel(
 
         unlockJob = viewModelScope.launch {
             try {
-                val salt = withContext(Dispatchers.IO) { saltProvider(true) }
+                val salt = withContext(ioDispatcher) { saltProvider(true) }
                 unlockVaultUseCase(password, salt, isColdVault = true)
                 // Success: the repository swapped to the cold DB and closed the hot one.
                 startCollecting(isCold = true) // also cancels the old hot reader

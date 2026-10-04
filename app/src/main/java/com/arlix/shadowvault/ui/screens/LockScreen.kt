@@ -5,16 +5,40 @@ import android.content.pm.ApplicationInfo
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,7 +47,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.arlix.shadowvault.R
 import com.arlix.shadowvault.ui.SecurePassphraseField
 import com.arlix.shadowvault.ui.VaultUiState
-import com.arlix.shadowvault.ui.theme.*
+import com.arlix.shadowvault.ui.theme.HotVaultAccent
+import com.arlix.shadowvault.ui.theme.HotVaultBorder
+import com.arlix.shadowvault.ui.theme.HotVaultCanvas
+import com.arlix.shadowvault.ui.theme.TextMuted
+import com.arlix.shadowvault.ui.theme.TextPrimary
 import com.arlix.shadowvault.ui.toSecretChars
 
 /** True if the default keyboard is not a system app. Unknown counts as "warn". */
@@ -85,9 +113,9 @@ fun SetupScreen(
             confirmState.clearText()
         }
     ) {
-        SecurePassphraseField(passwordState, "New Master Passphrase", Modifier.fillMaxWidth())
+        SecurePassphraseField(passwordState, "New Master Passphrase", Modifier.fillMaxWidth().testTag("SetupPasswordField"))
         Spacer(modifier = Modifier.height(12.dp))
-        SecurePassphraseField(confirmState, "Confirm Passphrase", Modifier.fillMaxWidth())
+        SecurePassphraseField(confirmState, "Confirm Passphrase", Modifier.fillMaxWidth().testTag("SetupConfirmPasswordField"))
     }
 }
 
@@ -111,7 +139,7 @@ fun UnlockScreen(
             passwordState.clearText()
         }
     ) {
-        SecurePassphraseField(passwordState, "Master Passphrase", Modifier.fillMaxWidth())
+        SecurePassphraseField(passwordState, "Master Passphrase", Modifier.fillMaxWidth().testTag("LoginPasswordField"))
     }
 }
 
@@ -135,7 +163,8 @@ private fun LockScreenLayout(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .padding(16.dp)
-                .background(HotVaultBorder, CircleShape)
+                .background(Color.White, CircleShape)
+                .border(1.dp, HotVaultBorder, CircleShape)
                 .padding(horizontal = 12.dp, vertical = 4.dp)
         ) {
             Text(
@@ -151,18 +180,21 @@ private fun LockScreenLayout(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
-                modifier = Modifier.size(64.dp).background(HotVaultBorder, CircleShape),
+                modifier = Modifier
+                    .size(64.dp)
+                    .background(Color.White, RoundedCornerShape(17.dp))
+                    .border(1.dp, HotVaultBorder, RoundedCornerShape(17.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_shield),
                     contentDescription = iconDescription,
                     modifier = Modifier.size(32.dp),
-                    tint = TextPrimary
+                    tint = Color.Unspecified
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             Text(text = title, style = MaterialTheme.typography.titleLarge, color = TextPrimary)
             Spacer(modifier = Modifier.height(8.dp))
             Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = TextMuted)
@@ -194,7 +226,7 @@ private fun LockScreenLayout(
             } else {
                 Button(
                     onClick = onButtonClick,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
                     enabled = buttonEnabled,
                     colors = ButtonDefaults.buttonColors(containerColor = HotVaultAccent)
                 ) {

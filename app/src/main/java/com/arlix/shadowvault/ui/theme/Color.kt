@@ -2,7 +2,7 @@ package com.arlix.shadowvault.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val HotVaultCanvas = Color(0xFFFAF9F5)
+val HotVaultCanvas = Color(0xFFFFFFFD)
 val ColdVaultCanvas = Color(0xFFF5F7FA)
 val HotVaultBorder = Color(0xFFE8E6DC)
 val ColdVaultBorder = Color(0xFFCFDBE7)

@@ -16,7 +16,7 @@ val FrauncesFontFamily = FontFamily(
     Font(R.font.fraunces_regular, FontWeight.Normal),
     Font(R.font.fraunces_bold, FontWeight.Bold)
 )
-val PlusJakartaSansFontFamily = FontFamily(
+val PlusJakartaSansFontFamily: FontFamily = FontFamily(
     Font(R.font.plusjakartasans_regular, FontWeight.Normal),
     Font(R.font.plusjakartasans_bold, FontWeight.Bold)
 )

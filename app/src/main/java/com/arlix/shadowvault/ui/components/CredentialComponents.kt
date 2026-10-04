@@ -1,12 +1,5 @@
 package com.arlix.shadowvault.ui.components
 
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
-import com.arlix.shadowvault.ui.screens.ObscuredTouchGuard
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -26,20 +19,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,16 +49,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arlix.shadowvault.R
+import com.arlix.shadowvault.ui.screens.ObscuredTouchGuard
 import com.arlix.shadowvault.ui.theme.ColdVaultAccent
 import com.arlix.shadowvault.ui.theme.ColdVaultBorder
 import com.arlix.shadowvault.ui.theme.ColdVaultCanvas
 import com.arlix.shadowvault.ui.theme.HotVaultAccent
 import com.arlix.shadowvault.ui.theme.HotVaultBorder
 import com.arlix.shadowvault.ui.theme.HotVaultCanvas
+import com.arlix.shadowvault.ui.theme.PlusJakartaSansFontFamily
 import com.arlix.shadowvault.ui.theme.TextMuted
 import com.arlix.shadowvault.ui.theme.TextPrimary
 
@@ -78,38 +78,38 @@ fun CredentialListItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .padding(horizontal = 24.dp, vertical = 7.dp)
             .clickable { onClick() },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(15.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .background(borderColor, RoundedCornerShape(12.dp)),
+                    .background(borderColor, RoundedCornerShape(17.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = initial,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.Thin,
                     color = TextPrimary
                 )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(17.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = TextPrimary
                 )
                 Text(
@@ -156,7 +156,7 @@ fun CredentialDetailSheetContent(
             .fillMaxWidth()
             .background(canvasColor)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .padding(horizontal = 24.dp, vertical = 0.dp)
     ) {
         // Header
         Row(
@@ -178,7 +178,7 @@ fun CredentialDetailSheetContent(
                         color = TextPrimary
                     )
                 }
-                Spacer(modifier = Modifier.width(16.dp))
+                Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
                         text = title,
@@ -189,7 +189,7 @@ fun CredentialDetailSheetContent(
                     Spacer(modifier = Modifier.height(4.dp))
                     Box(
                         modifier = Modifier
-                            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+                            .border(1.dp, borderColor, RoundedCornerShape(15.dp))
                             .padding(horizontal = 8.dp, vertical = 2.dp)
                     ) {
                         Text(
@@ -216,7 +216,9 @@ fun CredentialDetailSheetContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(15.dp))
+        HorizontalDivider(color = borderColor, thickness = 1.dp)
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Username Card
         DetailCardBox(title = "USERNAME / ACCOUNT", borderColor = borderColor) {
@@ -246,7 +248,7 @@ fun CredentialDetailSheetContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(15.dp))
 
         // Password Card
         DetailCardBox(title = "PASSWORD / SECRET", borderColor = borderColor) {
@@ -278,7 +280,7 @@ fun CredentialDetailSheetContent(
                             .border(1.dp, borderColor, RoundedCornerShape(12.dp))
                     ) {
                         Icon(
-                            imageVector = if (isRevealed) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                            painter = painterResource(if (isRevealed) R.drawable.ic_eye_slash else R.drawable.ic_eye),
                             contentDescription = "Reveal",
                             tint = TextPrimary,
                             modifier = Modifier.size(18.dp)
@@ -302,7 +304,7 @@ fun CredentialDetailSheetContent(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(15.dp))
 
         // Notes Card
         DetailCardBox(title = "NOTES & DETAILS", borderColor = borderColor) {
@@ -319,26 +321,26 @@ fun CredentialDetailSheetContent(
         // Action Buttons
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(15.dp)
         ) {
             OutlinedButton(
                 onClick = onEdit,
                 modifier = Modifier
                     .weight(1f)
                     .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(15.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Filled.Edit,
+                        painter = painterResource(R.drawable.ic_edit),
                         contentDescription = "Edit",
                         tint = TextPrimary,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Edit",
+                        text = "Edit Credential",
                         style = MaterialTheme.typography.labelLarge,
                         color = TextPrimary
                     )
@@ -350,12 +352,12 @@ fun CredentialDetailSheetContent(
                 modifier = Modifier
                     .weight(1f)
                     .height(56.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(15.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF0F0))
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Filled.Delete,
+                        imageVector = Icons.Outlined.Delete,
                         contentDescription = "Delete",
                         tint = deleteRed,
                         modifier = Modifier.size(18.dp)
@@ -402,11 +404,11 @@ fun CredentialDetailSheetContent(
 fun DetailCardBox(title: String, borderColor: Color, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        shape = RoundedCornerShape(15.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
         border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(15.dp)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.labelSmall,

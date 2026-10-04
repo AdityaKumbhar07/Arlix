@@ -19,6 +19,7 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
     @Volatile private var database: VaultDatabase? = null
     private val vaultMutex = Mutex()
     @Volatile private var openDbName: String? = null
+    @Volatile private var activeKey: ByteArray? = null
 
     override fun vaultExists(isColdVault: Boolean): Boolean {
         val dbName = if (isColdVault) "vault_secondary.db" else "vault_primary.db"
@@ -34,7 +35,11 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
             if (openDbName == dbName) closeVaultLocked()
 
             System.loadLibrary("sqlcipher")
-            val factory = SupportOpenHelperFactory(masterKey, null, true)
+            val keyCopy = masterKey.clone()
+            // Room 2.6+ uses a connection pool that spawns new connections for concurrent reads.
+            // If clearPassphrase = true, SQLCipher zeroes the key after the 1st connection,
+            // crashing all subsequent reads. We must manage clearing the key ourselves on lock.
+            val factory = SupportOpenHelperFactory(keyCopy, null, false)
 
             val db = Room.databaseBuilder(context, VaultDatabase::class.java, dbName)
                 .openHelperFactory(factory)
@@ -50,14 +55,21 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
                 db.openHelper.writableDatabase // forces the open; throws on a wrong key
             } catch (e: Exception) {
                 runCatching { db.close() }
+                keyCopy.fill(0)
                 throw e                        // the previously open vault is untouched
             }
 
             // Key proven correct: swap, then close the previous vault.
-            val old = database
+            val oldDb = database
+            val oldKey = activeKey
+            
             database = db
+            activeKey = keyCopy
             openDbName = dbName
-            old?.close()
+            
+            oldDb?.close()
+            oldKey?.fill(0)
+            
             true
         }
 
@@ -67,6 +79,8 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
         database?.close()
         database = null
         openDbName = null
+        activeKey?.fill(0)
+        activeKey = null
     }
 
     override fun isVaultOpen(): Boolean = database != null
