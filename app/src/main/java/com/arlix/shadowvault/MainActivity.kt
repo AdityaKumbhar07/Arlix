@@ -3,15 +3,18 @@ package com.arlix.shadowvault
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.arlix.shadowvault.crypto.SaltGenerator
 import com.arlix.shadowvault.ui.VaultUiState
 import com.arlix.shadowvault.ui.VaultViewModel
@@ -66,6 +69,15 @@ class MainActivity : ComponentActivity() {
                     // Errors from cold vault operations are shown in the Dashboard dialog.
                     val coldVaultError by viewModel.coldVaultError.collectAsState()
 
+                    // One-shot messages for failures while unlocked (e.g. storage full).
+                    val userMessage by viewModel.userMessage.collectAsState()
+                    val context = LocalContext.current
+                    LaunchedEffect(userMessage) {
+                        userMessage?.let {
+                            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+                            viewModel.clearUserMessage()
+                        }
+                    }
                     // Plain `when` (no Crossfade) so the unlocked screen disappears instantly on lock.
                     when (val state = uiState) {
 

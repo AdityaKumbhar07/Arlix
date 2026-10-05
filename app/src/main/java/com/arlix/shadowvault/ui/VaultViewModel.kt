@@ -6,13 +6,14 @@ import androidx.lifecycle.viewModelScope
 import com.arlix.shadowvault.crypto.constantTimeEquals
 import com.arlix.shadowvault.domain.IVaultRepository
 import com.arlix.shadowvault.domain.VaultEntry
+import com.arlix.shadowvault.domain.VaultFileException
+import com.arlix.shadowvault.domain.VaultRules
 import com.arlix.shadowvault.domain.usecase.LockVaultUseCase
 import com.arlix.shadowvault.domain.usecase.UnlockVaultUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,15 +24,15 @@ sealed class VaultUiState {
     /** First launch: no vault file exists yet. */
     data class Setup(val isColdVault: Boolean = false) : VaultUiState()
 
-    /** Vault exists, waiting for the passphrase. */
+    /** Vault exists and is locked, waiting for the passphrase. */
     object Locked : VaultUiState()
 
-    /** Key derivation + SQLCipher open in progress. */
+    /** Key derivation and SQLCipher open in progress. */
     object Unlocking : VaultUiState()
 
     /**
-     * Vault is open. [revision] changes on every publish so the UI always receives the
-     * fresh entries (StateFlow would otherwise skip "equal" states, and entry equality is by id only).
+     * Vault is open. [revision] changes on every publish so the UI always receives fresh
+     * entries (StateFlow would otherwise skip "equal" states, and entries compare by id only).
      */
     data class Unlocked(
         val entries: List<VaultEntry>,
@@ -39,7 +40,10 @@ sealed class VaultUiState {
         val revision: Long = 0L
     ) : VaultUiState()
 
-    /** Wrong password, corrupted vault, failed save, etc. Shown on the LockScreen. */
+    /**
+     * A problem shown on the LOCK screen (wrong passphrase, damaged vault, ...). The vault is
+     * always closed while this is shown. Problems while unlocked use [VaultViewModel.userMessage].
+     */
     data class Error(val message: String, val isSetupMode: Boolean = false) : VaultUiState()
 }
 
@@ -52,10 +56,11 @@ class VaultViewModel(
 ) : ViewModel() {
 
     private companion object {
-        const val MIN_PASSPHRASE_LENGTH = 5
         const val MSG_WRONG = "Incorrect Password or Corrupted Vault."
         const val MSG_WRONG_COLD = "Incorrect Cold Vault Key or Corrupted Vault."
         const val MSG_MEMORY = "Not enough free memory to unlock. Close other apps and try again."
+        const val MSG_FILES = "A vault key file is missing or damaged. Restore from a backup."
+        const val MSG_LIBRARY = "The encryption library failed to load. Reinstall the app."
     }
 
     private val _uiState = MutableStateFlow<VaultUiState>(VaultUiState.Locked)
@@ -64,18 +69,23 @@ class VaultViewModel(
     private val _selectedCategory = MutableStateFlow("All")
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
 
-    /** Errors from cold-vault operations while the Dashboard is showing (must not navigate away). */
+    /** Errors from cold-vault operations while the dashboard is showing (must not navigate away). */
     private val _coldVaultError = MutableStateFlow<String?>(null)
     val coldVaultError: StateFlow<String?> = _coldVaultError.asStateFlow()
 
+    /** One-shot message for failures while the vault is unlocked (shown as a toast, then cleared). */
+    private val _userMessage = MutableStateFlow<String?>(null)
+    val userMessage: StateFlow<String?> = _userMessage.asStateFlow()
+
     private var currentEntries: List<VaultEntry> = emptyList()
-    private var openVaultIsCold = false   // which vault is actually open right now
+    private var openVaultIsCold = false // which vault is actually open right now
     private var revision = 0L
     private var dbJob: Job? = null
     private var unlockJob: Job? = null
 
-    /** Guard against re-entrant cold vault operations. */
+    /** Guard against re-entrant cold-vault operations. */
     @Volatile private var coldVaultInProgress = false
+
     /** True while switching hot to cold; the hot reader's errors are expected then. */
     @Volatile private var switchingVaults = false
 
@@ -84,7 +94,12 @@ class VaultViewModel(
             _uiState.value = VaultUiState.Setup(isColdVault = false)
         }
         viewModelScope.launch {
-            lockVaultUseCase.lockEvents.collect { resetToLocked() }
+            lockVaultUseCase.lockEvents.collect {
+                resetToLocked()
+                // Safety net: an unlock that finished opening in the instant between the lock's
+                // close and this event must not stay open behind the lock screen.
+                vaultRepository.closeVault()
+            }
         }
     }
 
@@ -124,6 +139,7 @@ class VaultViewModel(
         else VaultUiState.Setup()
     }
 
+    /** Shows [message] on the lock screen after an unlock attempt failed. */
     private fun failHot(message: String) {
         if (isLockedOrSetup()) return
         _uiState.value = VaultUiState.Error(
@@ -133,8 +149,30 @@ class VaultViewModel(
     }
 
     /**
-     * Starts reading the open vault. New entries are published to the UI FIRST,
-     * and only then are the old arrays wiped, so the UI never reads a wiped password.
+     * Closes the vault for real, wipes memory, and shows [message] on the lock screen, so the
+     * lock screen is never shown while the vault is still open.
+     */
+    private suspend fun lockWithMessage(message: String) {
+        vaultRepository.closeVault()
+        resetToLocked()
+        _uiState.value = VaultUiState.Error(message, isSetupMode = false)
+    }
+
+    /** Maps a failure to a message without revealing anything beyond the failure class. */
+    private fun failureMessage(e: Throwable, isCold: Boolean): String = when (e) {
+        is OutOfMemoryError -> MSG_MEMORY
+        is VaultFileException -> MSG_FILES
+        is LinkageError -> MSG_LIBRARY // e.g. a native library failed to load
+        else -> if (isCold) MSG_WRONG_COLD else MSG_WRONG
+    }
+
+    /** Errors other than these are real bugs and must not be swallowed. */
+    private fun isHandledError(e: Throwable): Boolean =
+        e !is Error || e is OutOfMemoryError || e is LinkageError
+
+    /**
+     * Starts reading the open vault. New entries are published to the UI FIRST, and only then
+     * are the old arrays wiped, so the UI never reads a wiped password.
      */
     private fun startCollecting(isCold: Boolean) {
         openVaultIsCold = isCold
@@ -153,7 +191,7 @@ class VaultViewModel(
                 // If the vault was closed on purpose (lock / vault switch) this is expected.
                 if (!switchingVaults && vaultRepository.isVaultOpen() && !isLockedOrSetup()) {
                     if (isCold) _coldVaultError.value = "Failed to load cold vault entries."
-                    else _uiState.value = VaultUiState.Error("Vault read error. Please re-unlock.")
+                    else lockWithMessage("Vault read error. Please unlock again.")
                 }
             }
         }
@@ -173,10 +211,9 @@ class VaultViewModel(
     // ------------------------------------------------------------------
 
     fun createVault(password: CharArray, confirmPassword: CharArray, isColdVault: Boolean = false) {
-        // [T20] Passphrase strength is checked at creation only.
         val error = when {
-            password.size < MIN_PASSPHRASE_LENGTH ->
-                "Passphrase must be at least $MIN_PASSPHRASE_LENGTH characters."
+            password.size < VaultRules.MIN_PASSPHRASE_LENGTH ->
+                "Passphrase must be at least ${VaultRules.MIN_PASSPHRASE_LENGTH} characters."
             !constantTimeEquals(password, confirmPassword) ->
                 "Passphrases do not match. Please try again."
             else -> null
@@ -184,7 +221,7 @@ class VaultViewModel(
         confirmPassword.fill('\u0000')
 
         if (error != null) {
-            if (isColdVault) _coldVaultError.value = error   // stay on the Dashboard
+            if (isColdVault) _coldVaultError.value = error // stay on the dashboard
             else _uiState.value = VaultUiState.Error(error, isSetupMode = true)
             password.fill('\u0000')
             return
@@ -223,10 +260,9 @@ class VaultViewModel(
                 startCollecting(isCold = false)
             } catch (e: CancellationException) {
                 throw e
-            } catch (e: OutOfMemoryError) {
-                failHot(MSG_MEMORY)
-            } catch (e: Exception) {
-                failHot(MSG_WRONG)
+            } catch (e: Throwable) {
+                if (!isHandledError(e)) throw e
+                failHot(failureMessage(e, isCold = false))
             } finally {
                 password.fill('\u0000') // also covers a cancel before the use case ran
             }
@@ -234,9 +270,8 @@ class VaultViewModel(
     }
 
     /**
-     * Opens or creates the Cold Vault without navigating away from the Dashboard.
-     * The hot vault stays open until the cold key is proven correct, so a wrong
-     * cold key only shows an error and leaves the user where they are.
+     * Opens or creates the cold vault without leaving the dashboard. The hot vault stays open
+     * until the cold key is proven correct, so a wrong cold key only shows an error.
      */
     private fun unlockColdVaultInternal(password: CharArray) {
         coldVaultInProgress = true
@@ -252,9 +287,9 @@ class VaultViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
-                if (e is Error && e !is OutOfMemoryError) throw e
-                // Hot vault is untouched and still open: show the message, stay on the Dashboard.
-                _coldVaultError.value = if (e is OutOfMemoryError) MSG_MEMORY else MSG_WRONG_COLD
+                if (!isHandledError(e)) throw e
+                // The hot vault is untouched and still open: show the message, stay on the dashboard.
+                _coldVaultError.value = failureMessage(e, isCold = true)
             } finally {
                 password.fill('\u0000')
                 switchingVaults = false
@@ -279,6 +314,8 @@ class VaultViewModel(
 
     fun clearColdVaultError() { _coldVaultError.value = null }
 
+    fun clearUserMessage() { _userMessage.value = null }
+
     // ------------------------------------------------------------------
     // Credentials. The Room Flow re-emits after every write, so the list refreshes by itself.
     // ------------------------------------------------------------------
@@ -291,7 +328,8 @@ class VaultViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (!isLockedOrSetup()) _uiState.value = VaultUiState.Error("Failed to save credential.")
+                // The vault stays unlocked; only report the failure (e.g. storage full).
+                if (!isLockedOrSetup()) _userMessage.value = "Could not save the credential. Is storage full?"
             } finally {
                 entry.annihilate()
             }
@@ -307,7 +345,7 @@ class VaultViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (!isLockedOrSetup()) _uiState.value = VaultUiState.Error("Failed to delete credential.")
+                if (!isLockedOrSetup()) _userMessage.value = "Could not delete the credential."
             }
         }
     }

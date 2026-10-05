@@ -1,4 +1,5 @@
 package com.arlix.shadowvault
+
 import android.app.Application
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -12,11 +13,16 @@ import com.arlix.shadowvault.data.VaultRepositoryImpl
 import com.arlix.shadowvault.domain.IVaultRepository
 import com.arlix.shadowvault.domain.usecase.LockVaultUseCase
 import com.arlix.shadowvault.domain.usecase.UnlockVaultUseCase
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
+/**
+ * Owns the process-wide singletons and is the ONE place that locks the vault when the app
+ * leaves the foreground or the screen turns off.
+ */
 class ArlixApplication : Application(), DefaultLifecycleObserver {
 
     lateinit var cryptoProvider: ShadowCryptoProvider
@@ -28,7 +34,11 @@ class ArlixApplication : Application(), DefaultLifecycleObserver {
     lateinit var unlockUseCase: UnlockVaultUseCase
         private set
 
-    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // A failure while locking must never crash the app in the background. The repository
+    // already resets its state and zeroes the key in a finally block before any exception escapes.
+    private val applicationScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, _ -> }
+    )
 
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -53,15 +63,15 @@ class ArlixApplication : Application(), DefaultLifecycleObserver {
         unlockUseCase = UnlockVaultUseCase(cryptoProvider, vaultRepository)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
 
-        // Register receiver for ACTION_SCREEN_OFF at runtime (cannot be in manifest)
+        // ACTION_SCREEN_OFF cannot be declared in the manifest, so it is registered at runtime.
+        // It is a protected system broadcast, so no export flag is required.
         registerReceiver(screenOffReceiver, IntentFilter(Intent.ACTION_SCREEN_OFF))
     }
 
     override fun onStop(owner: LifecycleOwner) {
-        // ProcessLifecycleOwner fires ON_STOP only after ALL activities have been stopped
-        // for ~700 ms, so rotation and short dialogs never reach here.
-        // Deliberately NOT blocking the main thread: if the process is killed, the keys
-        // disappear with it, so there is nothing that must finish first.
+        // ProcessLifecycleOwner fires ON_STOP only after ALL activities have been stopped for
+        // ~700 ms, so rotation and short dialogs never reach here. Not blocking the main
+        // thread is deliberate: if the process is killed, the keys disappear with it.
         applicationScope.launch { lockUseCase() }
     }
 }

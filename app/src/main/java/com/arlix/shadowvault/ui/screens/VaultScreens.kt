@@ -605,6 +605,12 @@ fun ColdVaultScreen(
 // ---------------------------------------------------------------------------
 
 /** [initial] == null means "new credential"; otherwise the form edits that entry (same id). */
+
+// Input limits keep a single row small enough to always load (Android cursors fail on huge rows).
+private const val MAX_TITLE = 100
+private const val MAX_USERNAME = 200
+private const val MAX_NOTES = 4000
+
 @Composable
 fun AddCredentialForm(
     initial: VaultEntry? = null,
@@ -669,7 +675,7 @@ fun AddCredentialForm(
         Spacer(modifier = Modifier.height(4.dp))
         OutlinedTextField(
             value = title,
-            onValueChange = { title = it },
+           onValueChange = { if (it.length <= MAX_TITLE) title = it },
             placeholder = { Text("e.g. ProtonMail, GitHub", color = TextMuted) },
             shape = RoundedCornerShape(12.dp),
             colors = textFieldColors,
@@ -682,7 +688,7 @@ fun AddCredentialForm(
         Spacer(modifier = Modifier.height(4.dp))
         OutlinedTextField(
             value = username,
-            onValueChange = { username = it },
+            onValueChange = { if (it.length <= MAX_USERNAME) username = it },
             placeholder = { Text("e.g. user@example.com", color = TextMuted) },
             shape = RoundedCornerShape(12.dp),
             colors = textFieldColors,
@@ -737,7 +743,7 @@ fun AddCredentialForm(
         Spacer(modifier = Modifier.height(4.dp))
         OutlinedTextField(
             value = notes,
-            onValueChange = { notes = it },
+            onValueChange = { if (it.length <= MAX_NOTES) notes = it },
             placeholder = { Text("Additional secret notes...", color = TextMuted) },
             shape = RoundedCornerShape(12.dp),
             colors = textFieldColors,

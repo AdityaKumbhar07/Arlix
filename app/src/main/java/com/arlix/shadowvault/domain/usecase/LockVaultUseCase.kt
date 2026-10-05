@@ -1,17 +1,24 @@
 package com.arlix.shadowvault.domain.usecase
 
 import com.arlix.shadowvault.domain.IVaultRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 
 class LockVaultUseCase(
     private val vaultRepository: IVaultRepository
 ) {
-    private val _lockEvents = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val lockEvents: kotlinx.coroutines.flow.Flow<Unit> = _lockEvents
+    private val _lockEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Emits after every lock, so the UI can wipe its in-memory state and show the lock screen. */
+    val lockEvents: Flow<Unit> = _lockEvents
 
     suspend operator fun invoke() {
-        // Closes the DB and commands SQLCipher to purge keys from its C++ memory
-        vaultRepository.closeVault()
-        // NOTE: manual lock() also triggers this collector via its own lockEvents.tryEmit — redundant but harmless double state-write, not a bug.
-        _lockEvents.tryEmit(Unit)
+        try {
+            // Closes the database and zeroes the key.
+            vaultRepository.closeVault()
+        } finally {
+            // Even if closing failed, the UI must still return to the lock screen.
+            _lockEvents.tryEmit(Unit)
+        }
     }
 }

@@ -4,6 +4,11 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
+// Export the Room schema (commit app/schemas/ to git). Needed to write and test migrations.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 android {
 
     packaging {
