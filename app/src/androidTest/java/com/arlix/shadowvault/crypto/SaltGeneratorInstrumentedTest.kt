@@ -3,6 +3,7 @@ package com.arlix.shadowvault.crypto
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.arlix.shadowvault.domain.VaultFileException
 import com.arlix.shadowvault.testutil.VaultTestFiles
 import org.junit.After
 import org.junit.Assert.*
@@ -62,7 +63,7 @@ class SaltGeneratorInstrumentedTest {
         val db = ctx.getDatabasePath("vault_primary.db")
         db.parentFile?.mkdirs(); db.writeBytes(byteArrayOf(1))
         ctx.getDatabasePath("vault_primary.salt").writeBytes(byteArrayOf(1, 2, 3))
-        assertThrows(IllegalStateException::class.java) { SaltGenerator.getSalt(ctx) }
+        assertThrows(VaultFileException::class.java) { SaltGenerator.getSalt(ctx) }
         assertEquals(3, ctx.getDatabasePath("vault_primary.salt").readBytes().size) // untouched
     }
 }

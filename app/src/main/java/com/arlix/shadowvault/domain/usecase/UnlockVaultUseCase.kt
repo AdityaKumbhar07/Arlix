@@ -36,6 +36,7 @@ class UnlockVaultUseCase(
         var masterKey: ByteArray? = null
         try {
             masterKey = cryptoProvider.deriveMasterKey(password, salt)
+            password.fill('\u0000') // the passphrase is no longer needed once the key exists
             return try {
                 withContext(ioDispatcher) { vaultRepository.openVault(masterKey, isColdVault) }
             } catch (e: CancellationException) {

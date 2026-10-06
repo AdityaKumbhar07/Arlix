@@ -26,6 +26,9 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
     private companion object {
         const val DB_HOT = "vault_primary.db"
         const val DB_COLD = "vault_secondary.db"
+
+        /** Hot-vault entries always carry a category; cold-vault entries never do (stored as ""). */
+        const val DEFAULT_CATEGORY = "General"
     }
 
     // All state below is only changed while holding [vaultMutex].
@@ -136,9 +139,10 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
 
     override suspend fun addEntry(entry: VaultEntry) = vaultMutex.withLock {
         val db = database ?: throw IllegalStateException("Vault is locked!")
+        val isCold = openDbName == DB_COLD
         val passwordBytes = charArrayToUtf8Bytes(entry.passwordSecret)
         try {
-            db.vaultDao().insertCredential(entry.toEntity(passwordBytes))
+            db.vaultDao().insertCredential(entry.toEntity(passwordBytes, isCold))
         } finally {
             passwordBytes.fill(0) // wiped even if the insert fails
         }
@@ -146,12 +150,13 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
 
     override suspend fun addEntries(entries: List<VaultEntry>) = vaultMutex.withLock {
         val db = database ?: throw IllegalStateException("Vault is locked!")
+        val isCold = openDbName == DB_COLD
         val buffers = ArrayList<ByteArray>(entries.size)
         try {
             val rows = entries.map { entry ->
                 val bytes = charArrayToUtf8Bytes(entry.passwordSecret)
                 buffers += bytes
-                entry.toEntity(bytes)
+                entry.toEntity(bytes, isCold)
             }
             db.withTransaction { rows.forEach { db.vaultDao().insertCredential(it) } }
         } finally {
@@ -241,8 +246,14 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
         }
     }
 
-    private fun VaultEntry.toEntity(passwordBytes: ByteArray) = VaultEntity(
-        id = id, title = title, username = username, notes = notes, category = category,
+    /**
+     * Cold-vault entries have no category (stored as ""); hot-vault entries always have one.
+     * Enforced here, at the storage boundary, so no path (form, restore, old backups) can
+     * mix the two kinds.
+     */
+    private fun VaultEntry.toEntity(passwordBytes: ByteArray, isCold: Boolean) = VaultEntity(
+        id = id, title = title, username = username, notes = notes,
+        category = if (isCold) "" else category.ifBlank { DEFAULT_CATEGORY },
         passwordBytes = passwordBytes, createdAt = createdAt, modifiedAt = modifiedAt
     )
 }

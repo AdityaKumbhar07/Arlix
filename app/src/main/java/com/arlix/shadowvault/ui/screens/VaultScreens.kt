@@ -1,10 +1,20 @@
 package com.arlix.shadowvault.ui.screens
 
-import androidx.compose.animation.core.animate
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -14,20 +24,43 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.core.view.ViewCompat.animate
 import com.arlix.shadowvault.BuildConfig
 import com.arlix.shadowvault.R
 import com.arlix.shadowvault.domain.VaultEntry
@@ -35,7 +68,14 @@ import com.arlix.shadowvault.ui.PlainTextKeyboardOptions
 import com.arlix.shadowvault.ui.SecurePassphraseField
 import com.arlix.shadowvault.ui.components.CredentialDetailSheetContent
 import com.arlix.shadowvault.ui.components.CredentialListItem
-import com.arlix.shadowvault.ui.theme.*
+import com.arlix.shadowvault.ui.theme.ColdVaultAccent
+import com.arlix.shadowvault.ui.theme.ColdVaultBorder
+import com.arlix.shadowvault.ui.theme.ColdVaultCanvas
+import com.arlix.shadowvault.ui.theme.HotVaultAccent
+import com.arlix.shadowvault.ui.theme.HotVaultBorder
+import com.arlix.shadowvault.ui.theme.HotVaultCanvas
+import com.arlix.shadowvault.ui.theme.TextMuted
+import com.arlix.shadowvault.ui.theme.TextPrimary
 import com.arlix.shadowvault.ui.toSecretChars
 
 // ---------------------------------------------------------------------------
@@ -55,7 +95,9 @@ fun HotVaultScreen(
     coldVaultExists: Boolean,
     onColdVaultCreate: (CharArray, CharArray) -> Unit,
     coldVaultError: String?,
-    onDismissColdVaultError: () -> Unit
+    onDismissColdVaultError: () -> Unit,
+    coldVaultBusy: Boolean,
+    onOpenTools: () -> Unit
 ) {
     var showAddSheet by remember { mutableStateOf(false) }
     // The UI keeps only entry IDs, never entry objects: the ViewModel owns (and wipes) the
@@ -143,7 +185,7 @@ fun HotVaultScreen(
             }
 
             HorizontalDivider(
-                modifier = Modifier.offset(y = -3.dp),
+                modifier = Modifier.offset(y = (-3).dp),
                 color = HotVaultBorder,
                 thickness = 1.dp
             )
@@ -317,6 +359,38 @@ fun HotVaultScreen(
 
                 Spacer(modifier = Modifier.height(32.dp))
 
+                Text("Backup & Passphrase", style = MaterialTheme.typography.labelLarge, color = TextMuted)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    border = BorderStroke(1.dp, HotVaultBorder)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                        Text(
+                            "Change the passphrase, or back up and restore this vault as an encrypted file.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextMuted
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = {
+                                showSettingsSheet = false
+                                onOpenTools()
+                            },
+                            modifier = Modifier.fillMaxWidth().height(56.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = HotVaultAccent)
+                        ) {
+                            Text("Open tools", style = MaterialTheme.typography.labelLarge, color = HotVaultCanvas)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+
                 Text("About Developer", style = MaterialTheme.typography.labelLarge, color = TextMuted)
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -364,6 +438,7 @@ fun HotVaultScreen(
         ColdVaultModal(
             coldVaultExists = coldVaultExists,
             coldVaultError = coldVaultError,
+            coldVaultBusy = coldVaultBusy,
             onDismiss = {
                 showColdVaultModal = false
                 onDismissColdVaultError()
@@ -382,6 +457,7 @@ fun HotVaultScreen(
 fun ColdVaultModal(
     coldVaultExists: Boolean,
     coldVaultError: String?,
+    coldVaultBusy: Boolean,
     onDismiss: () -> Unit,
     onOpenColdVault: (CharArray) -> Unit,
     onColdVaultCreate: (CharArray, CharArray) -> Unit
@@ -453,6 +529,11 @@ fun ColdVaultModal(
                     )
                 }
 
+                if (coldVaultBusy) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    CircularProgressIndicator(color = ColdVaultAccent)
+                }
+
                 if (coldVaultError != null) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -473,7 +554,7 @@ fun ColdVaultModal(
                         confirmState.clearText()
                     },
                     modifier = Modifier.fillMaxWidth().height(56.dp),
-                    enabled = coldState.text.isNotEmpty() && (coldVaultExists || confirmState.text.isNotEmpty()),
+                    enabled = !coldVaultBusy && coldState.text.isNotEmpty() && (coldVaultExists || confirmState.text.isNotEmpty()),
                     colors = ButtonDefaults.buttonColors(containerColor = ColdVaultAccent)
                 ) {
                     Row(
@@ -505,7 +586,8 @@ fun ColdVaultScreen(
     entries: List<VaultEntry>,
     onBack: () -> Unit,
     onAddEntry: (VaultEntry) -> Unit,
-    onDeleteEntry: (String) -> Unit
+    onDeleteEntry: (String) -> Unit,
+    onOpenTools: () -> Unit
 ) {
     var showAddSheet by remember { mutableStateOf(false) }
     var selectedId by remember { mutableStateOf<String?>(null) }
@@ -525,6 +607,16 @@ fun ColdVaultScreen(
                                 painter = painterResource(R.drawable.ic_arrow_left),
                                 contentDescription = "Lock Cold Vault",
                                 tint = TextPrimary
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onOpenTools) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_gear),
+                                contentDescription = "Backup and passphrase tools",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     },
@@ -755,6 +847,8 @@ fun AddCredentialForm(
         Button(
             onClick = {
                 val secret = passwordState.toSecretChars()
+                // Cold-vault entries have no category.
+                val savedCategory = if (isColdVault) "" else category
                 val entry = if (initial != null) {
                     // Edit: same id and created date, new modified date.
                     VaultEntry(
@@ -763,7 +857,7 @@ fun AddCredentialForm(
                         username = username,
                         notes = notes,
                         passwordSecret = secret,
-                        category = category,
+                        category = savedCategory,
                         createdAt = initial.createdAt
                     )
                 } else {
@@ -772,7 +866,7 @@ fun AddCredentialForm(
                         username = username,
                         notes = notes,
                         passwordSecret = secret,
-                        category = category
+                        category = savedCategory
                     )
                 }
                 passwordState.clearText()

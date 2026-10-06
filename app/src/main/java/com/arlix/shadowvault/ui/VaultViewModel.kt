@@ -83,8 +83,9 @@ class VaultViewModel(
     private var dbJob: Job? = null
     private var unlockJob: Job? = null
 
-    /** Guard against re-entrant cold-vault operations. */
-    @Volatile private var coldVaultInProgress = false
+    /** True while a cold-vault open/create runs; the UI shows a spinner and blocks a second attempt. */
+    private val _coldVaultBusy = MutableStateFlow(false)
+    val coldVaultBusy: StateFlow<Boolean> = _coldVaultBusy.asStateFlow()
 
     /** True while switching hot to cold; the hot reader's errors are expected then. */
     @Volatile private var switchingVaults = false
@@ -228,7 +229,7 @@ class VaultViewModel(
         }
 
         if (isColdVault) {
-            if (coldVaultInProgress) { password.fill('\u0000'); return }
+            if (_coldVaultBusy.value) { password.fill('\u0000'); return }
             unlockColdVaultInternal(password)
         } else {
             unlockHotVaultInternal(password)
@@ -241,7 +242,7 @@ class VaultViewModel(
 
     fun unlock(password: CharArray, isColdVault: Boolean = false) {
         if (isColdVault) {
-            if (coldVaultInProgress) { password.fill('\u0000'); return }
+            if (_coldVaultBusy.value) { password.fill('\u0000'); return }
             unlockColdVaultInternal(password)
         } else {
             if (_uiState.value is VaultUiState.Unlocking) { password.fill('\u0000'); return }
@@ -274,7 +275,7 @@ class VaultViewModel(
      * until the cold key is proven correct, so a wrong cold key only shows an error.
      */
     private fun unlockColdVaultInternal(password: CharArray) {
-        coldVaultInProgress = true
+        _coldVaultBusy.value = true
         switchingVaults = true
         _coldVaultError.value = null
 
@@ -293,7 +294,7 @@ class VaultViewModel(
             } finally {
                 password.fill('\u0000')
                 switchingVaults = false
-                coldVaultInProgress = false
+                _coldVaultBusy.value = false
             }
         }
     }

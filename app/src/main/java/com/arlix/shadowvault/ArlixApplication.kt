@@ -8,9 +8,11 @@ import android.content.IntentFilter
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
+import com.arlix.shadowvault.crypto.BackupCodec
 import com.arlix.shadowvault.crypto.ShadowCryptoProvider
 import com.arlix.shadowvault.data.VaultRepositoryImpl
 import com.arlix.shadowvault.domain.IVaultRepository
+import com.arlix.shadowvault.domain.usecase.ChangePassphraseUseCase
 import com.arlix.shadowvault.domain.usecase.LockVaultUseCase
 import com.arlix.shadowvault.domain.usecase.UnlockVaultUseCase
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -32,6 +34,12 @@ class ArlixApplication : Application(), DefaultLifecycleObserver {
     lateinit var lockUseCase: LockVaultUseCase
         private set
     lateinit var unlockUseCase: UnlockVaultUseCase
+        private set
+
+    lateinit var changePassphraseUseCase: ChangePassphraseUseCase
+        private set
+
+    lateinit var backupCodec: BackupCodec
         private set
 
     // A failure while locking must never crash the app in the background. The repository
@@ -61,6 +69,8 @@ class ArlixApplication : Application(), DefaultLifecycleObserver {
         vaultRepository = VaultRepositoryImpl(applicationContext)
         lockUseCase = LockVaultUseCase(vaultRepository)
         unlockUseCase = UnlockVaultUseCase(cryptoProvider, vaultRepository)
+        changePassphraseUseCase = ChangePassphraseUseCase(cryptoProvider, vaultRepository)
+        backupCodec = BackupCodec(cryptoProvider)
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
 
         // ACTION_SCREEN_OFF cannot be declared in the manifest, so it is registered at runtime.

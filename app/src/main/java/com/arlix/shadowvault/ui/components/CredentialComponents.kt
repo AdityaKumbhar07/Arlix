@@ -49,7 +49,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -61,7 +60,6 @@ import com.arlix.shadowvault.ui.theme.ColdVaultCanvas
 import com.arlix.shadowvault.ui.theme.HotVaultAccent
 import com.arlix.shadowvault.ui.theme.HotVaultBorder
 import com.arlix.shadowvault.ui.theme.HotVaultCanvas
-import com.arlix.shadowvault.ui.theme.PlusJakartaSansFontFamily
 import com.arlix.shadowvault.ui.theme.TextMuted
 import com.arlix.shadowvault.ui.theme.TextPrimary
 
@@ -186,17 +184,20 @@ fun CredentialDetailSheetContent(
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Box(
-                        modifier = Modifier
-                            .border(1.dp, borderColor, RoundedCornerShape(15.dp))
-                            .padding(horizontal = 8.dp, vertical = 2.dp)
-                    ) {
-                        Text(
-                            text = category,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextMuted
-                        )
+                    // Categories belong to the hot vault only; cold entries have none.
+                    if (!isColdVault) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .border(1.dp, borderColor, RoundedCornerShape(15.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = category,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextMuted
+                            )
+                        }
                     }
                 }
             }
