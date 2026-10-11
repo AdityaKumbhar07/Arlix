@@ -47,7 +47,7 @@ abstract class VaultViewModelTestBase {
         vm = VaultViewModel(
             unlockVaultUseCase = unlock,
             lockVaultUseCase = lock,
-            repository = repo,
+            vaultRepository = repo,
             saltProvider = { isCold -> if (isCold) coldSalt else hotSalt },
             ioDispatcher = dispatcher
         )

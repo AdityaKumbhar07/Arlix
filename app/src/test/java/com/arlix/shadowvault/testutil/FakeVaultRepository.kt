@@ -19,7 +19,16 @@ fun VaultEntry.deepCopy(): VaultEntry = copy(passwordSecret = passwordSecret.cop
 class FakeVaultRepository : IVaultRepository {
 
     private class Vault(val key: ByteArray) {
-        val entries = MutableStateFlow<List<VaultEntry>>(emptyList())
+        val entries = kotlinx.coroutines.flow.MutableSharedFlow<List<VaultEntry>>(
+            replay = 1,
+            onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST
+        ).apply { tryEmit(emptyList()) }
+        
+        var currentEntries: List<VaultEntry> = emptyList()
+            set(value) {
+                field = value
+                entries.tryEmit(value)
+            }
     }
 
     private val vaults = HashMap<Boolean, Vault>()
@@ -37,11 +46,11 @@ class FakeVaultRepository : IVaultRepository {
 
     fun seedVault(isCold: Boolean, key: ByteArray, entries: List<VaultEntry> = emptyList()) {
         val v = Vault(key.copyOf())
-        v.entries.value = entries.map { it.deepCopy() }.sortedBy { it.title }
+        v.currentEntries = entries.map { it.deepCopy() }.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
         vaults[isCold] = v
     }
 
-    fun storedEntries(isCold: Boolean): List<VaultEntry> = vaults[isCold]?.entries?.value ?: emptyList()
+    fun storedEntries(isCold: Boolean): List<VaultEntry> = vaults[isCold]?.currentEntries ?: emptyList()
     fun storedKey(isCold: Boolean): ByteArray? = vaults[isCold]?.key?.copyOf()
 
     override suspend fun openVault(masterKey: ByteArray, isColdVault: Boolean): Boolean {
@@ -76,13 +85,41 @@ class FakeVaultRepository : IVaultRepository {
     override suspend fun addEntry(entry: VaultEntry) {
         failNextAdd?.let { failNextAdd = null; throw it }
         val v = current ?: throw IllegalStateException("Vault is locked!")
-        v.entries.value = (v.entries.value.filterNot { it.id == entry.id } + entry.deepCopy())
-            .sortedBy { it.title }
+        v.currentEntries = (v.currentEntries.filterNot { it.id == entry.id } + entry.deepCopy())
+            .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
     }
 
     override suspend fun deleteEntry(entryId: String) {
         failNextDelete?.let { failNextDelete = null; throw it }
         val v = current ?: throw IllegalStateException("Vault is locked!")
-        v.entries.value = v.entries.value.filterNot { it.id == entryId }
+        v.currentEntries = v.currentEntries.filterNot { it.id == entryId }
+    }
+
+    override suspend fun readAllEntries(): List<VaultEntry> {
+        if (failReads) throw java.io.IOException("read failed")
+        val v = current ?: throw IllegalStateException("Vault is locked!")
+        return v.currentEntries.map { it.deepCopy() }
+    }
+
+    override suspend fun addEntries(entries: List<VaultEntry>) {
+        failNextAdd?.let { failNextAdd = null; throw it }
+        val v = current ?: throw IllegalStateException("Vault is locked!")
+        var list = v.currentEntries
+        for (e in entries) {
+            list = list.filterNot { it.id == e.id } + e.deepCopy()
+        }
+        v.currentEntries = list.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.title })
+    }
+
+    override suspend fun changePassphrase(oldKey: ByteArray, newKey: ByteArray, isColdVault: Boolean) {
+        val v = current ?: throw java.lang.IllegalStateException("Nothing is open")
+        if (openIsCold != isColdVault) throw java.lang.IllegalStateException("Another vault is open")
+        if (!v.key.contentEquals(oldKey)) throw com.arlix.shadowvault.domain.WrongPassphraseException()
+        
+        val newVault = Vault(newKey.copyOf())
+        newVault.currentEntries = v.currentEntries.map { it.deepCopy() }
+        vaults[isColdVault] = newVault
+        current = null
+        openIsCold = null
     }
 }

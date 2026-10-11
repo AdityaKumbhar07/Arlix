@@ -172,6 +172,7 @@ class E2EUserFlowTest {
 
             // Immediately simulate user pushing app to background while Argon2id is running
             scenario.moveToState(Lifecycle.State.CREATED)
+            Thread.sleep(1500)
 
             // Bring app back to foreground
             scenario.moveToState(Lifecycle.State.RESUMED)

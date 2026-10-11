@@ -21,12 +21,17 @@ import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import java.io.File
 import java.security.MessageDigest
 
-class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
+/**
+ * [hotDbName] and [coldDbName] are the database file names. Only tests pass other values,
+ * so they can never touch a real vault.
+ */
+class VaultRepositoryImpl(
+    private val context: Context,
+    private val hotDbName: String = "vault_primary.db",
+    private val coldDbName: String = "vault_secondary.db"
+) : IVaultRepository {
 
     private companion object {
-        const val DB_HOT = "vault_primary.db"
-        const val DB_COLD = "vault_secondary.db"
-
         /** Hot-vault entries always carry a category; cold-vault entries never do (stored as ""). */
         const val DEFAULT_CATEGORY = "General"
     }
@@ -41,7 +46,7 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
     @Volatile private var activeKey: ByteArray? = null
     private val vaultMutex = Mutex()
 
-    private fun dbNameFor(isCold: Boolean) = if (isCold) DB_COLD else DB_HOT
+        private fun dbNameFor(isCold: Boolean) = if (isCold) coldDbName else hotDbName
 
     override fun vaultExists(isColdVault: Boolean): Boolean =
         context.getDatabasePath(dbNameFor(isColdVault)).exists()
@@ -139,7 +144,7 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
 
     override suspend fun addEntry(entry: VaultEntry) = vaultMutex.withLock {
         val db = database ?: throw IllegalStateException("Vault is locked!")
-        val isCold = openDbName == DB_COLD
+        val isCold = openDbName == coldDbName
         val passwordBytes = charArrayToUtf8Bytes(entry.passwordSecret)
         try {
             db.vaultDao().insertCredential(entry.toEntity(passwordBytes, isCold))
@@ -150,7 +155,7 @@ class VaultRepositoryImpl(private val context: Context) : IVaultRepository {
 
     override suspend fun addEntries(entries: List<VaultEntry>) = vaultMutex.withLock {
         val db = database ?: throw IllegalStateException("Vault is locked!")
-        val isCold = openDbName == DB_COLD
+        val isCold = openDbName == coldDbName
         val buffers = ArrayList<ByteArray>(entries.size)
         try {
             val rows = entries.map { entry ->

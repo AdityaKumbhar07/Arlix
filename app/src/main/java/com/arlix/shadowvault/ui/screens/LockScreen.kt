@@ -102,7 +102,7 @@ fun SetupScreen(
         badge = "FIRST-TIME SETUP",
         iconDescription = "Shield",
         title = "Create Master Key",
-        subtitle = "Minimum 5 characters. This passphrase cannot be recovered if forgotten.",
+        subtitle = $$"Minimum ${VaultRules.MIN_PASSPHRASE_LENGTH} characters. This passphrase cannot be recovered if forgotten.",
         uiState = uiState,
         buttonText = "Create master key",
         buttonEnabled = passwordState.text.isNotEmpty() && confirmState.text.isNotEmpty(),

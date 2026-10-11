@@ -129,7 +129,7 @@ class VaultViewModelTest : VaultViewModelTestBase() {
         seed(false, "hotpass"); newVm()
         repo.failReads = true
         unlockHot("hotpass"); waitError()
-        assertEquals("Vault read error. Please re-unlock.", (state() as VaultUiState.Error).message)
+        assertEquals("Vault read error. Please unlock again.", (state() as VaultUiState.Error).message)
     }
 
     @Test fun failedFirstCreationReturnsToSetupScreen() {
@@ -238,15 +238,15 @@ class VaultViewModelTest : VaultViewModelTestBase() {
     @Test fun addFailureShowsErrorAndStillWipesEntry() {
         openHot()
         repo.failNextAdd = java.io.IOException("disk full")
-        val e = entry(); vm.addCredential(e); waitError()
-        assertEquals("Failed to save credential.", (state() as VaultUiState.Error).message)
+        val e = entry(); vm.addCredential(e); settle()
+        assertEquals("Could not save the credential. Is storage full?", vm.userMessage.value)
         assertTrue(isZeroed(e.passwordSecret))
     }
 
     @Test fun deleteFailureShowsError() {
         openHot(makeEntries(2))
-        repo.failNextDelete = java.io.IOException("io"); vm.deleteCredential("id-Site-0"); waitError()
-        assertEquals("Failed to delete credential.", (state() as VaultUiState.Error).message)
+        repo.failNextDelete = java.io.IOException("io"); vm.deleteCredential("id-Site-0"); settle()
+        assertEquals("Could not delete the credential.", vm.userMessage.value)
     }
 
     @Test fun addWhileLockedLeavesStateLocked() {
@@ -295,11 +295,11 @@ class VaultViewModelTest : VaultViewModelTestBase() {
         seed(true, "coldpass"); openHot()
         crypto.gate = CompletableDeferred()
         unlockCold("coldpass")
-        waitFor { crypto.deriveCalls == 1 }
+        waitFor { crypto.deriveCalls == 2 }
         val second = unlockCold("coldpass")
         assertTrue(isZeroed(second))
         crypto.gate!!.complete(Unit); waitUnlocked(cold = true)
-        assertEquals(1, crypto.deriveCalls)
+        assertEquals(2, crypto.deriveCalls)
     }
 
     @Test fun lockFromColdVaultWipesColdEntries() {

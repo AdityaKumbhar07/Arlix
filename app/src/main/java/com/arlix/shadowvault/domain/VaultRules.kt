@@ -2,7 +2,7 @@ package com.arlix.shadowvault.domain
 
 /** Rules shared by every place that creates or changes a passphrase. */
 object VaultRules {
-    const val MIN_PASSPHRASE_LENGTH = 5
+    const val MIN_PASSPHRASE_LENGTH = 8
 
     /**
      * Backups sit in the cloud, so an attacker only needs your Drive account to get a

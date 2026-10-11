@@ -14,17 +14,24 @@ import java.security.SecureRandom
 object SaltGenerator {
     private const val SALT_SIZE = 16
 
+    /** Salt for the hot or cold vault. */
+    fun getSalt(context: Context, isColdVault: Boolean = false): ByteArray =
+        getSalt(
+            context,
+            saltName = if (isColdVault) "vault_secondary.salt" else "vault_primary.salt",
+            dbName = if (isColdVault) "vault_secondary.db" else "vault_primary.db"
+        )
+
     /**
-     * Returns the salt for this vault, creating it only when no vault exists yet.
+     * Returns the salt stored in [saltName], creating it only when the vault database
+     * [dbName] does not exist yet. Separate overload so tests can use throwaway file names.
      *
      * A salt is NEVER regenerated for an existing vault: a new salt would silently make the
-     * vault unopenable. A missing or damaged salt file next to an existing database is
-     * reported as a [VaultFileException] instead.
+     * vault unopenable. A missing or damaged salt next to an existing database is reported
+     * as a [VaultFileException] instead.
      */
     @Synchronized
-    fun getSalt(context: Context, isColdVault: Boolean = false): ByteArray {
-        val saltName = if (isColdVault) "vault_secondary.salt" else "vault_primary.salt"
-        val dbName = if (isColdVault) "vault_secondary.db" else "vault_primary.db"
+    internal fun getSalt(context: Context, saltName: String, dbName: String): ByteArray {
         val saltFile = context.getDatabasePath(saltName)
         val dbExists = context.getDatabasePath(dbName).exists()
 
