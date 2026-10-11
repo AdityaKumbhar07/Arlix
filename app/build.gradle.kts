@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -7,6 +9,12 @@ plugins {
 // Export the Room schema (commit app/schemas/ to git). Needed to write and test migrations.
 ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
+}
+
+// Release signing credentials (optional; absent on F-Droid's build servers)
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -36,6 +44,17 @@ android {
         }
     }
 
+    signingConfigs {
+        if (keystoreProps.isNotEmpty()) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
             // R8: shrinks unused code and resources (this also drops the huge unused icon set).
@@ -45,6 +64,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (keystoreProps.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     testOptions {
@@ -79,7 +101,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.process) // ProcessLifecycleOwner — precise app-level bg detection (T7)
+    implementation(libs.androidx.lifecycle.process) // ProcessLifecycleOwner ? precise app-level bg detection (T7)
     implementation(libs.androidx.material3)
     //implementation(libs.identity)
     testImplementation(libs.junit)
@@ -95,7 +117,7 @@ dependencies {
     androidTestImplementation("io.mockk:mockk-android:1.13.10")
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
-        // SQLCipher AES-256 Page Encryption
+    // SQLCipher AES-256 Page Encryption
     implementation(libs.sqlcipher.android)
     implementation(libs.androidx.sqlite)
 
