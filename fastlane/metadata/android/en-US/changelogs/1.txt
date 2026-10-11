@@ -1,0 +1,10 @@
+Initial release.
+
+• Offline AES-256 encrypted password vault (SQLCipher)
+• Argon2id key derivation for passphrase-based vault unlock
+• Add, edit, and delete credential entries (name, username, password, URL, notes)
+• Secure passphrase change with full database re-key
+• Encrypted backup export and import
+• Auto-lock on app background and screen-off
+• No network access, no cloud, no analytics
+

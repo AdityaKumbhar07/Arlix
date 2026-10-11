@@ -1,0 +1,39 @@
+Categories:
+  - Security
+
+AuthorName: Arlix Authors
+AuthorEmail: ""
+
+WebSite: https://github.com/AdityaKumbhar07/arlix
+SourceCode: https://github.com/AdityaKumbhar07/arlix
+IssueTracker: https://github.com/AdityaKumbhar07/arlix/issues
+
+License: GPL-3.0-only
+AutoName: Arlix
+
+RepoType: git
+Repo: https://github.com/AdityaKumbhar07/arlix
+
+Builds:
+  - versionName: "1.0"
+    versionCode: 1
+    commit: v1.0
+    subdir: Arlix
+    gradle:
+      - release
+    ndk: r27c
+    build:
+      - $$NDK$$/ndk-build APP_ABI="armeabi-v7a arm64-v8a x86 x86_64"
+
+MaintainerNotes: |
+  Offline password vault. No network permissions.
+  Uses SQLCipher (BSD-style license) and BouncyCastle (MIT).
+  Native JNI library (memory_sanitizer) built from source via CMake.
+  NDK required for native build — ndk: r27c specified above.
+  No proprietary dependencies; all libs on Maven Central.
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags
+CurrentVersion: "1.0"
+CurrentVersionCode: 1
+

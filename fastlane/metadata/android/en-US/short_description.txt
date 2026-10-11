@@ -1,0 +1,2 @@
+100% offline, zero-network password vault encrypted with AES-256 + Argon2id.
+

@@ -1,0 +1,27 @@
+Arlix is a fully offline, open-source password vault for Android. Your credentials never leave your device — there is no cloud sync, no analytics, no network access whatsoever.
+
+<b>How it works</b>
+Every vault entry is stored in an AES-256 encrypted SQLite database (SQLCipher). The database key is derived from your passphrase using Argon2id — a memory-hard key derivation function that makes brute-force attacks expensive. A 256-bit random salt stored alongside the database ensures that the same passphrase produces a different key on every device.
+
+<b>Security features</b>
+• AES-256-CBC page encryption via SQLCipher
+• Argon2id key derivation (memory-hard, configurable iterations)
+• Zero network permissions — the app cannot connect to the Internet
+• Screen content hidden from Android's recent-apps preview (FLAG_SECURE)
+• Vault auto-locks when the app is backgrounded or the screen turns off
+• No cloud backup — all backup exclusion rules are enforced in the manifest
+• Encrypted export/import for device-to-device migration (no plaintext export)
+• Native memory zeroing via JNI for sensitive byte arrays
+
+<b>What Arlix does NOT do</b>
+• No cloud sync, no accounts, no registration
+• No analytics, crash reporting, or telemetry of any kind
+• No in-app purchases or ads
+• No autofill service (planned for a future release)
+
+<b>Storage</b>
+All data lives exclusively in your device's internal private storage. Uninstalling the app permanently destroys the encrypted database.
+
+<b>Open source</b>
+Arlix is free and open-source software. The full source code is available for audit on GitHub/GitLab.
+

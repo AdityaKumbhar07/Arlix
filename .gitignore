@@ -16,3 +16,7 @@ local.properties
 /.idea/appInsightsSettings.xml
 /.idea/deploymentTargetSelector.xml
 /.idea/androidTestResultsUserPreferences.xml
+
+# Scratch / design / temp files — do not commit
+/scratch_icons/
+/test_out.txt
